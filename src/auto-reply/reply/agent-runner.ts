@@ -466,15 +466,13 @@ export async function runReplyAgent(params: {
       (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined);
     const responseUsageMode = resolveResponseUsageMode(responseUsageRaw);
     if (responseUsageMode !== "off" && hasNonzeroUsage(usage)) {
-      const authMode = resolveModelAuthMode(providerUsed, cfg);
-      const showCost = authMode === "api-key" || authMode === "oauth" || authMode === "token";
-      const costConfig = showCost
-        ? resolveModelCostConfig({
-            provider: providerUsed,
-            model: modelUsed,
-            config: cfg,
-          })
-        : undefined;
+      // Always attempt to show cost; formatResponseUsageLine handles missing cost data gracefully.
+      const showCost = true;
+      const costConfig = resolveModelCostConfig({
+        provider: providerUsed,
+        model: modelUsed,
+        config: cfg,
+      });
       let formatted = formatResponseUsageLine({
         usage,
         showCost,
