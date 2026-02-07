@@ -421,12 +421,7 @@ export async function runReplyAgent(params: {
     const { replyPayloads } = payloadResult;
     didLogHeartbeatStrip = payloadResult.didLogHeartbeatStrip;
 
-    if (replyPayloads.length === 0) {
-      return finalizeWithFollowup(undefined, queueKey, runFollowupTurn);
-    }
-
-    await signalTypingIfNeeded(replyPayloads, typingSignals);
-
+    // Emit diagnostics regardless of whether payloads were already streamed.
     if (isDiagnosticsEnabled(cfg) && hasNonzeroUsage(usage)) {
       const input = usage.input ?? 0;
       const output = usage.output ?? 0;
@@ -464,6 +459,8 @@ export async function runReplyAgent(params: {
       });
     }
 
+    // Compute usage line before the early-return so block-streaming runs still
+    // get a trailing usage footer even though the main payloads were already sent.
     const responseUsageRaw =
       activeSessionEntry?.responseUsage ??
       (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined);
@@ -490,6 +487,17 @@ export async function runReplyAgent(params: {
         responseUsageLine = formatted;
       }
     }
+
+    if (replyPayloads.length === 0) {
+      // Block-streaming already delivered the main content.  Send the usage
+      // line as a tail payload so the user still sees token counts.
+      if (responseUsageLine) {
+        return finalizeWithFollowup({ text: responseUsageLine }, queueKey, runFollowupTurn);
+      }
+      return finalizeWithFollowup(undefined, queueKey, runFollowupTurn);
+    }
+
+    await signalTypingIfNeeded(replyPayloads, typingSignals);
 
     // If verbose is enabled and this is a new session, prepend a session hint.
     let finalPayloads = replyPayloads;

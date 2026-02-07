@@ -164,6 +164,11 @@ export async function resolveApiKeyForProfile(params: {
   if (profileConfig && profileConfig.mode !== cred.type) {
     // Compatibility: treat "oauth" config as compatible with stored token profiles.
     if (!(profileConfig.mode === "oauth" && cred.type === "token")) {
+      log.debug("profile mode/type mismatch, skipping", {
+        profileId,
+        configMode: profileConfig.mode,
+        credType: cred.type,
+      });
       return null;
     }
   }
