@@ -467,7 +467,7 @@ export async function runReplyAgent(params: {
     const responseUsageMode = resolveResponseUsageMode(responseUsageRaw);
     if (responseUsageMode !== "off" && hasNonzeroUsage(usage)) {
       const authMode = resolveModelAuthMode(providerUsed, cfg);
-      const showCost = authMode === "api-key";
+      const showCost = authMode === "api-key" || authMode === "oauth" || authMode === "token";
       const costConfig = showCost
         ? resolveModelCostConfig({
             provider: providerUsed,
