@@ -463,7 +463,8 @@ export async function runReplyAgent(params: {
     // get a trailing usage footer even though the main payloads were already sent.
     const responseUsageRaw =
       activeSessionEntry?.responseUsage ??
-      (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined);
+      (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined) ??
+      cfg.agents?.defaults?.responseUsage;
     const responseUsageMode = resolveResponseUsageMode(responseUsageRaw);
     if (responseUsageMode !== "off" && hasNonzeroUsage(usage)) {
       // Always attempt to show cost; formatResponseUsageLine handles missing cost data gracefully.
