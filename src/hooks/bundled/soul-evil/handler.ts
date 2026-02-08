@@ -32,6 +32,9 @@ const soulEvilHook: HookHandler = async (event) => {
     return;
   }
 
+  const beforeNames = context.bootstrapFiles.map((f) => f.name);
+  const hasSoul = beforeNames.includes("SOUL.md");
+
   const updated = await applySoulEvilOverride({
     files: context.bootstrapFiles,
     workspaceDir,
@@ -42,6 +45,12 @@ const soulEvilHook: HookHandler = async (event) => {
       debug: (message) => console.warn(`[soul-evil] ${message}`),
     },
   });
+
+  // Compare before/after to detect if SOUL was swapped
+  const swapped = updated !== context.bootstrapFiles;
+  console.warn(
+    `[soul-evil] bootstrap check: hasSoul=${hasSoul} chance=${soulConfig.chance ?? "none"} swapped=${swapped} session=${context.sessionKey ?? "unknown"}`,
+  );
 
   context.bootstrapFiles = updated;
 };
