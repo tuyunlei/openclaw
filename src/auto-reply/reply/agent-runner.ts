@@ -19,6 +19,7 @@ import {
   updateSessionStoreEntry,
 } from "../../config/sessions.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
+import { diagnosticLogger as diag } from "../../logging/diagnostic.js";
 import { defaultRuntime } from "../../runtime.js";
 import { estimateUsageCost, resolveModelCostConfig } from "../../utils/usage-format.js";
 import { resolveResponseUsageMode, type VerboseLevel } from "../thinking.js";
@@ -159,8 +160,12 @@ export async function runReplyAgent(params: {
         })
       : null;
 
-  if (shouldSteer && isStreaming) {
+  // [FIX] Removed isStreaming check - steer should work whenever there's an active run,
+  // not just when LLM is streaming. pi-agent-core's steer() delivers messages after
+  // current tool execution completes.
+  if (shouldSteer) {
     const steered = queueEmbeddedPiMessage(followupRun.run.sessionId, followupRun.prompt);
+    diag.debug(`steer: attempt result=${steered} sessionId=${followupRun.run.sessionId}`);
     if (steered && !shouldFollowup) {
       if (activeSessionEntry && activeSessionStore && sessionKey) {
         const updatedAt = Date.now();
