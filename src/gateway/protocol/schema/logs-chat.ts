@@ -40,6 +40,16 @@ export const ChatSendParamsSchema = Type.Object(
     attachments: Type.Optional(Type.Array(Type.Unknown())),
     timeoutMs: Type.Optional(Type.Integer({ minimum: 0 })),
     idempotencyKey: NonEmptyString,
+    /** When true, inherit delivery context (channel/to/threadId/accountId) from the target session's last inbound route. */
+    inheritDelivery: Type.Optional(Type.Boolean()),
+    /** Explicit channel override (e.g. "telegram", "discord"). Takes priority over inheritDelivery. */
+    channel: Type.Optional(Type.String()),
+    /** Explicit delivery target (e.g. "telegram:-1003806272588"). Takes priority over inheritDelivery. */
+    to: Type.Optional(Type.String()),
+    /** Explicit account ID override. Takes priority over inheritDelivery. */
+    accountId: Type.Optional(Type.String()),
+    /** Explicit thread/topic ID override. Takes priority over inheritDelivery. */
+    threadId: Type.Optional(Type.Union([Type.String(), Type.Number()])),
   },
   { additionalProperties: false },
 );

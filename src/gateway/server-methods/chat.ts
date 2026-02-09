@@ -11,7 +11,11 @@ import { dispatchInboundMessage } from "../../auto-reply/dispatch.js";
 import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.js";
 import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
-import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
+import { deliveryContextFromSession } from "../../utils/delivery-context.js";
+import {
+  INTERNAL_MESSAGE_CHANNEL,
+  isDeliverableMessageChannel,
+} from "../../utils/message-channel.js";
 import {
   abortChatRunById,
   abortChatRunsForSessionKey,
@@ -324,6 +328,11 @@ export const chatHandlers: GatewayRequestHandlers = {
       }>;
       timeoutMs?: number;
       idempotencyKey: string;
+      inheritDelivery?: boolean;
+      channel?: string;
+      to?: string;
+      accountId?: string;
+      threadId?: string | number;
     };
     const stopCommand = isChatStopCommandText(p.message);
     const normalizedAttachments =
@@ -453,6 +462,31 @@ export const chatHandlers: GatewayRequestHandlers = {
       // See: https://github.com/moltbot/moltbot/issues/3658
       const stampedMessage = injectTimestamp(parsedMessage, timestampOptsFromConfig(cfg));
 
+      // Resolve delivery context: explicit params (B) > inheritDelivery (C) > webchat (default)
+      let resolvedChannel: string = INTERNAL_MESSAGE_CHANNEL;
+      let resolvedTo: string | undefined;
+      let resolvedAccountId: string | undefined;
+      let resolvedThreadId: string | number | undefined;
+
+      if (p.channel && isDeliverableMessageChannel(p.channel)) {
+        // Plan B: explicit channel override
+        resolvedChannel = p.channel;
+        resolvedTo = p.to;
+        resolvedAccountId = p.accountId;
+        resolvedThreadId = p.threadId;
+      } else if (p.inheritDelivery && entry) {
+        // Plan C: inherit from session's last delivery context
+        const dc = deliveryContextFromSession(entry);
+        if (dc?.channel && isDeliverableMessageChannel(dc.channel)) {
+          resolvedChannel = dc.channel;
+          resolvedTo = dc.to;
+          resolvedAccountId = dc.accountId;
+          resolvedThreadId = dc.threadId;
+        }
+      }
+
+      const isExternalChannel = resolvedChannel !== INTERNAL_MESSAGE_CHANNEL;
+
       const ctx: MsgContext = {
         Body: parsedMessage,
         BodyForAgent: stampedMessage,
@@ -462,7 +496,16 @@ export const chatHandlers: GatewayRequestHandlers = {
         SessionKey: p.sessionKey,
         Provider: INTERNAL_MESSAGE_CHANNEL,
         Surface: INTERNAL_MESSAGE_CHANNEL,
-        OriginatingChannel: INTERNAL_MESSAGE_CHANNEL,
+        ...(isExternalChannel
+          ? {
+              OriginatingChannel: resolvedChannel,
+              OriginatingTo: resolvedTo,
+              AccountId: resolvedAccountId,
+              MessageThreadId: resolvedThreadId,
+            }
+          : {
+              OriginatingChannel: INTERNAL_MESSAGE_CHANNEL,
+            }),
         ChatType: "direct",
         CommandAuthorized: true,
         MessageSid: clientRunId,
@@ -479,7 +522,7 @@ export const chatHandlers: GatewayRequestHandlers = {
       const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
         cfg,
         agentId,
-        channel: INTERNAL_MESSAGE_CHANNEL,
+        channel: isExternalChannel ? resolvedChannel : INTERNAL_MESSAGE_CHANNEL,
       });
       const finalReplyParts: string[] = [];
       const dispatcher = createReplyDispatcher({
