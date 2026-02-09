@@ -3,15 +3,18 @@ import crypto from "node:crypto";
 import type { AnyAgentTool } from "./common.js";
 import { loadConfig } from "../../config/config.js";
 import { callGateway } from "../../gateway/call.js";
+import { loadSessionEntry } from "../../gateway/session-utils.js";
 import {
   isSubagentSessionKey,
   normalizeAgentId,
   resolveAgentIdFromSessionKey,
 } from "../../routing/session-key.js";
 import { SESSION_LABEL_MAX_LENGTH } from "../../sessions/session-label.js";
+import { deliveryContextFromSession } from "../../utils/delivery-context.js";
 import {
   type GatewayMessageChannel,
   INTERNAL_MESSAGE_CHANNEL,
+  isDeliverableMessageChannel,
 } from "../../utils/message-channel.js";
 import { AGENT_LANE_NESTED } from "../lanes.js";
 import { jsonResult, readStringParam } from "./common.js";
@@ -32,6 +35,7 @@ const SessionsSendToolSchema = Type.Object({
   agentId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   message: Type.String(),
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 0 })),
+  inheritDelivery: Type.Optional(Type.Boolean()),
 });
 
 export function createSessionsSendTool(opts?: {
@@ -252,12 +256,37 @@ export function createSessionsSendTool(opts?: {
         requesterChannel: opts?.agentChannel,
         targetSessionKey: displayKey,
       });
+
+      // Resolve delivery context for the target session
+      const inheritDelivery = params.inheritDelivery === true;
+      let sendChannel: string = INTERNAL_MESSAGE_CHANNEL;
+      let sendTo: string | undefined;
+      let sendAccountId: string | undefined;
+      let sendThreadId: string | undefined;
+      let sendDeliver = false;
+
+      if (inheritDelivery) {
+        const { entry: targetEntry } = loadSessionEntry(resolvedKey);
+        const dc = deliveryContextFromSession(targetEntry);
+        if (dc?.channel && isDeliverableMessageChannel(dc.channel)) {
+          sendChannel = dc.channel;
+          sendTo = dc.to;
+          sendAccountId = dc.accountId;
+          sendThreadId = dc.threadId != null ? String(dc.threadId) : undefined;
+          sendDeliver = true;
+        }
+      }
+
       const sendParams = {
         message,
         sessionKey: resolvedKey,
         idempotencyKey,
-        deliver: false,
-        channel: INTERNAL_MESSAGE_CHANNEL,
+        deliver: sendDeliver,
+        channel: sendChannel,
+        ...(sendTo ? { to: sendTo, replyTo: sendTo } : {}),
+        ...(sendAccountId ? { accountId: sendAccountId, replyAccountId: sendAccountId } : {}),
+        ...(sendThreadId ? { threadId: sendThreadId } : {}),
+        ...(sendDeliver ? { replyChannel: sendChannel } : {}),
         lane: AGENT_LANE_NESTED,
         extraSystemPrompt: agentMessageContext,
       };
