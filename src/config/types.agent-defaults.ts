@@ -171,6 +171,8 @@ export type AgentDefaultsConfig = {
   /** Default elevated level when no /elevated directive is present. */
   elevatedDefault?: "off" | "on" | "ask" | "full";
   /** Default block streaming level when no override is present. */
+  /** Default response usage display level for all sessions. */
+  responseUsage?: "off" | "on" | "tokens" | "full";
   blockStreamingDefault?: "off" | "on";
   /**
    * Block streaming boundary:
