@@ -13,8 +13,10 @@ export { runEmbeddedPiAgent } from "./pi-embedded-runner/run.js";
 export {
   abortEmbeddedPiRun,
   isEmbeddedPiRunActive,
+  isEmbeddedPiRunActiveBySessionKey,
   isEmbeddedPiRunStreaming,
   queueEmbeddedPiMessage,
+  queueEmbeddedPiMessageBySessionKey,
   waitForEmbeddedPiRunEnd,
 } from "./pi-embedded-runner/runs.js";
 export { buildEmbeddedSandboxInfo } from "./pi-embedded-runner/sandbox-info.js";

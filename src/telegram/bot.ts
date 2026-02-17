@@ -4,9 +4,15 @@ import { type Message, type UserFromGetMe } from "@grammyjs/types";
 import type { ApiClientOptions } from "grammy";
 import { Bot, webhookCallback } from "grammy";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import {
+  isEmbeddedPiRunActiveBySessionKey,
+  queueEmbeddedPiMessageBySessionKey,
+} from "../agents/pi-embedded-runner.js";
 import { resolveTextChunkLimit } from "../auto-reply/chunk.js";
+import { isControlCommandMessage } from "../auto-reply/command-detection.js";
 import { isAbortRequestText } from "../auto-reply/reply/abort.js";
 import { DEFAULT_GROUP_HISTORY_LIMIT, type HistoryEntry } from "../auto-reply/reply/history.js";
+import { resolveQueueSettings } from "../auto-reply/reply/queue/settings.js";
 import {
   isNativeCommandsExplicitlyDisabled,
   resolveNativeCommandsEnabled,
@@ -22,6 +28,7 @@ import { loadSessionStore, resolveStorePath } from "../config/sessions.js";
 import { danger, logVerbose, shouldLogVerbose } from "../globals.js";
 import { formatUncaughtError } from "../infra/errors.js";
 import { getChildLogger } from "../logging.js";
+import { diagnosticLogger as diag } from "../logging/diagnostic.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { resolveTelegramAccount } from "./accounts.js";
@@ -61,6 +68,86 @@ export type TelegramBotOptions = {
     textFragmentGapMs?: number;
   };
 };
+
+/**
+ * Creates middleware that attempts to steer incoming messages into active runs
+ * before they reach sequentialize. This allows injecting messages during tool
+ * execution without blocking the queue.
+ */
+function createSteerMiddleware(cfg: OpenClawConfig) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return async (ctx: any, next: () => Promise<void>) => {
+    const msg = ctx.message ?? ctx.update?.message ?? ctx.update?.edited_message;
+    if (!msg) {
+      return next();
+    }
+
+    const chatId = msg.chat?.id;
+    const chatType = msg.chat?.type;
+    if (!chatId) {
+      return next();
+    }
+
+    // Check queue mode
+    const queueSettings = resolveQueueSettings({ cfg, channel: "telegram" });
+    const isSteerMode = queueSettings.mode === "steer" || queueSettings.mode === "steer-backlog";
+    if (!isSteerMode) {
+      return next();
+    }
+
+    // Build approximate sessionKey (manual construction for performance;
+    // could use buildAgentSessionKey or resolveAgentRoute but this avoids overhead)
+    const agentId = resolveDefaultAgentId(cfg);
+    const isGroup = chatType === "group" || chatType === "supergroup";
+    const topicId = resolveTelegramForumThreadId({
+      isForum: msg.chat && "is_forum" in msg.chat ? msg.chat.is_forum : false,
+      messageThreadId: msg.message_thread_id,
+    });
+
+    let sessionKey: string;
+    if (isGroup) {
+      sessionKey = topicId
+        ? `agent:${agentId}:telegram:group:${chatId}:topic:${topicId}`
+        : `agent:${agentId}:telegram:group:${chatId}`;
+    } else {
+      sessionKey = `agent:${agentId}:telegram:dm:${chatId}`;
+    }
+
+    // Check if there's an active run for this session
+    if (!isEmbeddedPiRunActiveBySessionKey(sessionKey)) {
+      return next();
+    }
+
+    // Build message text
+    const text = msg.text ?? msg.caption ?? "";
+    if (!text.trim()) {
+      return next();
+    }
+
+    // Don't steer control commands
+    if (isControlCommandMessage(text, cfg, {})) {
+      return next();
+    }
+
+    // Try to steer the message
+    const senderName = msg.from?.first_name ?? msg.from?.username ?? "Unknown";
+    const steerText = `[Telegram ${senderName}]: ${text}`;
+
+    const result = queueEmbeddedPiMessageBySessionKey(sessionKey, steerText);
+
+    if (result) {
+      diag.debug(
+        `steer: middleware success sessionKey=${sessionKey} sessionId=${result.sessionId}`,
+      );
+      // Message was steered, don't continue to sequentialize
+      return;
+    }
+
+    // Steer failed, continue normal flow
+    diag.debug(`steer: middleware failed sessionKey=${sessionKey}`);
+    return next();
+  };
+}
 
 export function getTelegramSequentialKey(ctx: {
   chat?: { id?: number };
@@ -140,6 +227,10 @@ export function createTelegramBot(opts: TelegramBotOptions) {
 
   const bot = new Bot(opts.token, client ? { client } : undefined);
   bot.api.config.use(apiThrottler());
+
+  // Steer middleware: check if we can inject message into active run BEFORE sequentialize blocks
+  bot.use(createSteerMiddleware(cfg));
+
   bot.use(sequentialize(getTelegramSequentialKey));
   // Catch all errors from bot middleware to prevent unhandled rejections
   bot.catch((err) => {

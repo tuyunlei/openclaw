@@ -16,6 +16,7 @@ import {
 import type { TypingMode } from "../../config/types.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
+import { diagnosticLogger as diag } from "../../logging/diagnostic.js";
 import { defaultRuntime } from "../../runtime.js";
 import { estimateUsageCost, resolveModelCostConfig } from "../../utils/usage-format.js";
 import type { OriginatingChannelType, TemplateContext } from "../templating.js";
@@ -127,7 +128,7 @@ export async function runReplyAgent(params: {
     shouldSteer,
     shouldFollowup,
     isActive,
-    isStreaming,
+    isStreaming: _isStreaming,
     opts,
     typing,
     sessionEntry,
@@ -218,8 +219,12 @@ export async function runReplyAgent(params: {
     }
   };
 
-  if (shouldSteer && isStreaming) {
+  // [FIX] Removed isStreaming check - steer should work whenever there's an active run,
+  // not just when LLM is streaming. pi-agent-core's steer() delivers messages after
+  // current tool execution completes.
+  if (shouldSteer) {
     const steered = queueEmbeddedPiMessage(followupRun.run.sessionId, followupRun.prompt);
+    diag.debug(`steer: attempt result=${steered} sessionId=${followupRun.run.sessionId}`);
     if (steered && !shouldFollowup) {
       await touchActiveSessionEntry();
       typing.cleanup();
