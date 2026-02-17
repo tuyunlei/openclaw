@@ -6,10 +6,10 @@ import {
   type ReplyPayload,
   type RuntimeEnv,
 } from "openclaw/plugin-sdk";
+import type { MentionTarget } from "./mention.js";
 import type { FeishuConfig } from "./types.js";
 import { resolveFeishuAccount } from "./accounts.js";
 import { createFeishuClient } from "./client.js";
-import type { MentionTarget } from "./mention.js";
 import { buildMentionedCardContent } from "./mention.js";
 import { resolveFeishuGroupConfig } from "./policy.js";
 import { getFeishuRuntime } from "./runtime.js";
