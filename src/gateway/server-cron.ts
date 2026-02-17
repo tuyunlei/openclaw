@@ -17,6 +17,7 @@ import { runHeartbeatOnce } from "../infra/heartbeat-runner.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { fetchWithSsrFGuard } from "../infra/net/fetch-guard.js";
 import { SsrFBlockedError } from "../infra/net/ssrf.js";
+import { runSessionInjectTurn } from "../infra/session-inject-turn.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
 import { getChildLogger } from "../logging.js";
 import { normalizeAgentId, toAgentStoreSessionKey } from "../routing/session-key.js";
@@ -182,6 +183,16 @@ export function buildGatewayCronService(params: {
         reason: opts?.reason,
         agentId,
         sessionKey,
+        deps: { ...params.deps, runtime: defaultRuntime },
+      });
+    },
+    runSessionInjectTurn: async (opts) => {
+      const runtimeConfig = loadConfig();
+      return await runSessionInjectTurn({
+        cfg: runtimeConfig,
+        sessionKey: opts.sessionKey,
+        text: opts.text,
+        reason: opts.reason,
         deps: { ...params.deps, runtime: defaultRuntime },
       });
     },

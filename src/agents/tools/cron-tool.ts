@@ -19,7 +19,7 @@ import { resolveInternalSessionKey, resolveMainSessionAlias } from "./sessions-h
 
 const CRON_ACTIONS = ["status", "list", "add", "update", "remove", "run", "runs", "wake"] as const;
 
-const CRON_WAKE_MODES = ["now", "next-heartbeat"] as const;
+const CRON_WAKE_MODES = ["now", "next-heartbeat", "agent-turn"] as const;
 const CRON_RUN_MODES = ["due", "force"] as const;
 
 const REMINDER_CONTEXT_MESSAGES_MAX = 10;
@@ -41,6 +41,7 @@ const CronToolSchema = Type.Object({
   text: Type.Optional(Type.String()),
   mode: optionalStringEnum(CRON_WAKE_MODES),
   runMode: optionalStringEnum(CRON_RUN_MODES),
+  sessionKey: Type.Optional(Type.String()),
   contextMessages: Type.Optional(
     Type.Number({ minimum: 0, maximum: REMINDER_CONTEXT_MESSAGES_MAX }),
   ),
@@ -211,7 +212,7 @@ ACTIONS:
 - remove: Delete job (requires jobId)
 - run: Trigger job immediately (requires jobId)
 - runs: Get job run history (requires jobId)
-- wake: Send wake event (requires text, optional mode)
+- wake: Send wake event (requires text, optional mode, optional sessionKey to target specific session)
 
 JOB SCHEMA (for add action):
 {
@@ -255,6 +256,8 @@ Default: prefer isolated agentTurn jobs unless the user explicitly wants a main-
 WAKE MODES (for wake action):
 - "next-heartbeat" (default): Wake on next heartbeat
 - "now": Wake immediately
+- "agent-turn": Inject event and run a normal agent turn immediately (requires sessionKey)
+- sessionKey: Optional session key to wake (e.g. "agent:main:telegram:group:-100xxx:topic:4467"). Without it, wakes the main session.
 
 Use jobId as the canonical identifier; id is accepted for compatibility. Use contextMessages (0-10) to add previous messages as context to the job text.`,
     parameters: CronToolSchema,
@@ -460,11 +463,19 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
         case "wake": {
           const text = readStringParam(params, "text", { required: true });
           const mode =
-            params.mode === "now" || params.mode === "next-heartbeat"
+            params.mode === "now" ||
+            params.mode === "next-heartbeat" ||
+            params.mode === "agent-turn"
               ? params.mode
               : "next-heartbeat";
+          const sessionKey = readStringParam(params, "sessionKey");
           return jsonResult(
-            await callGatewayTool("wake", gatewayOpts, { mode, text }, { expectFinal: false }),
+            await callGatewayTool(
+              "wake",
+              gatewayOpts,
+              { mode, text, sessionKey },
+              { expectFinal: false },
+            ),
           );
         }
         default:

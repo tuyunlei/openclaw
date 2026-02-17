@@ -24,6 +24,7 @@ export type HeartbeatTarget = OutboundChannel | "last";
 export type OutboundTarget = {
   channel: OutboundChannel;
   to?: string;
+  threadId?: string | number;
   reason?: string;
   accountId?: string;
   lastChannel?: DeliverableMessageChannel;
@@ -279,6 +280,7 @@ export function resolveHeartbeatDeliveryTarget(params: {
   return {
     channel: resolvedTarget.channel,
     to: resolved.to,
+    threadId: resolvedTarget.threadId,
     reason,
     accountId: effectiveAccountId,
     lastChannel: resolvedTarget.lastChannel,

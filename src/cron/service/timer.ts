@@ -638,17 +638,41 @@ function emitJobFinished(
   });
 }
 
-export function wake(
+export async function wake(
   state: CronServiceState,
-  opts: { mode: "now" | "next-heartbeat"; text: string },
+  opts: { mode: "now" | "next-heartbeat" | "agent-turn"; text: string; sessionKey?: string },
 ) {
   const text = opts.text.trim();
   if (!text) {
     return { ok: false } as const;
   }
-  state.deps.enqueueSystemEvent(text);
+
+  if (opts.mode === "agent-turn") {
+    if (!opts.sessionKey) {
+      return { ok: false, error: "sessionKey required for agent-turn mode" } as const;
+    }
+    // Pass text directly to runSessionInjectTurn instead of enqueuing as a
+    // system event.  enqueueSystemEvent can be drained by a concurrent turn,
+    // causing the inject turn to see an empty prompt.
+    if (state.deps.runSessionInjectTurn) {
+      const result = await state.deps.runSessionInjectTurn({
+        sessionKey: opts.sessionKey,
+        text,
+        reason: "wake",
+      });
+      return { ok: result.status === "ok", result } as const;
+    }
+    return { ok: false, error: "runSessionInjectTurn not available" } as const;
+  }
+
+  state.deps.enqueueSystemEvent(text, { sessionKey: opts.sessionKey });
   if (opts.mode === "now") {
-    state.deps.requestHeartbeatNow({ reason: "wake" });
+    if (opts.sessionKey && state.deps.runHeartbeatOnce) {
+      // Direct heartbeat run for targeted session
+      await state.deps.runHeartbeatOnce({ reason: "wake", sessionKey: opts.sessionKey });
+    } else {
+      state.deps.requestHeartbeatNow({ reason: "wake" });
+    }
   }
   return { ok: true } as const;
 }

@@ -53,6 +53,11 @@ export type CronServiceDeps = {
     agentId?: string;
     sessionKey?: string;
   }) => Promise<HeartbeatRunResult>;
+  runSessionInjectTurn?: (opts: {
+    sessionKey: string;
+    text?: string;
+    reason?: string;
+  }) => Promise<{ status: "ok" | "error" | "skipped"; text?: string; reason?: string }>;
   /**
    * WakeMode=now: max time to wait for runHeartbeatOnce to stop returning
    * { status:"skipped", reason:"requests-in-flight" } before falling back to
@@ -107,7 +112,7 @@ export function createCronServiceState(deps: CronServiceDeps): CronServiceState 
 }
 
 export type CronRunMode = "due" | "force";
-export type CronWakeMode = "now" | "next-heartbeat";
+export type CronWakeMode = "now" | "next-heartbeat" | "agent-turn";
 
 export type CronStatusSummary = {
   enabled: boolean;

@@ -214,9 +214,9 @@ export async function run(state: CronServiceState, id: string, mode?: "due" | "f
   });
 }
 
-export function wakeNow(
+export async function wakeNow(
   state: CronServiceState,
-  opts: { mode: "now" | "next-heartbeat"; text: string },
+  opts: { mode: "now" | "next-heartbeat" | "agent-turn"; text: string; sessionKey?: string },
 ) {
-  return wake(state, opts);
+  return await wake(state, opts);
 }

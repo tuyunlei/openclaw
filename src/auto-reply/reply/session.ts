@@ -27,6 +27,7 @@ import {
 import type { TtsAutoMode } from "../../config/types.tts.js";
 import { archiveSessionTranscripts } from "../../gateway/session-utils.fs.js";
 import { deliverSessionMaintenanceWarning } from "../../infra/session-maintenance-warning.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { normalizeMainKey } from "../../routing/session-key.js";
 import { normalizeSessionDeliveryFields } from "../../utils/delivery-context.js";
@@ -280,6 +281,19 @@ export async function initSessionState(params: {
   const lastTo = deliveryFields.lastTo ?? lastToRaw;
   const lastAccountId = deliveryFields.lastAccountId ?? lastAccountIdRaw;
   const lastThreadId = deliveryFields.lastThreadId ?? lastThreadIdRaw;
+  {
+    const sessionLog = createSubsystemLogger("session/delivery");
+    sessionLog.info("lastTo resolved", {
+      sessionKey,
+      provider: ctx.Provider,
+      isNew: isNewSession,
+      baseTo: baseEntry?.lastTo ?? null,
+      ctxTo: ctx.To ?? null,
+      ctxOrigTo: ctx.OriginatingTo ?? null,
+      lastTo,
+      changed: Boolean(baseEntry?.lastTo && lastTo && lastTo !== baseEntry.lastTo),
+    });
+  }
   sessionEntry = {
     ...baseEntry,
     sessionId,

@@ -480,29 +480,34 @@ export async function runHeartbeatOnce(opts: {
   sessionKey?: string;
   heartbeat?: HeartbeatConfig;
   reason?: string;
+  force?: boolean;
   deps?: HeartbeatDeps;
 }): Promise<HeartbeatRunResult> {
   const cfg = opts.cfg ?? loadConfig();
   const agentId = normalizeAgentId(opts.agentId ?? resolveDefaultAgentId(cfg));
   const heartbeat = opts.heartbeat ?? resolveHeartbeatConfig(cfg, agentId);
-  if (!heartbeatsEnabled) {
-    return { status: "skipped", reason: "disabled" };
-  }
-  if (!isHeartbeatEnabledForAgent(cfg, agentId)) {
-    return { status: "skipped", reason: "disabled" };
-  }
-  if (!resolveHeartbeatIntervalMs(cfg, undefined, heartbeat)) {
-    return { status: "skipped", reason: "disabled" };
+  if (!opts.force) {
+    if (!heartbeatsEnabled) {
+      return { status: "skipped", reason: "disabled" };
+    }
+    if (!isHeartbeatEnabledForAgent(cfg, agentId)) {
+      return { status: "skipped", reason: "disabled" };
+    }
+    if (!resolveHeartbeatIntervalMs(cfg, undefined, heartbeat)) {
+      return { status: "skipped", reason: "disabled" };
+    }
   }
 
   const startedAt = opts.deps?.nowMs?.() ?? Date.now();
-  if (!isWithinActiveHours(cfg, heartbeat, startedAt)) {
+  if (!opts.force && !isWithinActiveHours(cfg, heartbeat, startedAt)) {
     return { status: "skipped", reason: "quiet-hours" };
   }
 
-  const queueSize = (opts.deps?.getQueueSize ?? getQueueSize)(CommandLane.Main);
-  if (queueSize > 0) {
-    return { status: "skipped", reason: "requests-in-flight" };
+  if (!opts.force) {
+    const queueSize = (opts.deps?.getQueueSize ?? getQueueSize)(CommandLane.Main);
+    if (queueSize > 0) {
+      return { status: "skipped", reason: "requests-in-flight" };
+    }
   }
 
   // Skip heartbeat if HEARTBEAT.md exists but has no actionable content.
@@ -517,6 +522,7 @@ export async function runHeartbeatOnce(opts: {
   try {
     const heartbeatFileContent = await fs.readFile(heartbeatFilePath, "utf-8");
     if (
+      !opts.force &&
       isHeartbeatContentEffectivelyEmpty(heartbeatFileContent) &&
       !isExecEventReason &&
       !isCronEventReason &&
@@ -636,6 +642,7 @@ export async function runHeartbeatOnce(opts: {
       cfg,
       channel: delivery.channel,
       to: delivery.to,
+      threadId: delivery.threadId,
       accountId: delivery.accountId,
       payloads: [{ text: heartbeatOkText }],
       agentId,
@@ -830,6 +837,7 @@ export async function runHeartbeatOnce(opts: {
       cfg,
       channel: delivery.channel,
       to: delivery.to,
+      threadId: delivery.threadId,
       accountId: deliveryAccountId,
       agentId,
       payloads: [
