@@ -197,14 +197,14 @@ export async function applySessionsPatchToStore(params: {
   if ("responseUsage" in patch) {
     const raw = patch.responseUsage;
     if (raw === null) {
-      delete next.responseUsage;
+      next.responseUsage = "off";
     } else if (raw !== undefined) {
       const normalized = normalizeUsageDisplay(String(raw));
       if (!normalized) {
         return invalid('invalid responseUsage (use "off"|"tokens"|"full")');
       }
       if (normalized === "off") {
-        delete next.responseUsage;
+        next.responseUsage = "off";
       } else {
         next.responseUsage = normalized;
       }

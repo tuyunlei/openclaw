@@ -379,7 +379,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         try {
           const result = await client.patchSession({
             key: state.currentSessionKey,
-            responseUsage: next === "off" ? null : next,
+            responseUsage: next,
           });
           chatLog.addSystem(`usage footer: ${next}`);
           applySessionInfoFromPatch(result);

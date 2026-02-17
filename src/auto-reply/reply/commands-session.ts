@@ -238,11 +238,7 @@ export const handleUsageCommand: CommandHandler = async (params, allowTextComman
   const next = requested ?? (current === "off" ? "tokens" : current === "tokens" ? "full" : "off");
 
   if (params.sessionEntry && params.sessionStore && params.sessionKey) {
-    if (next === "off") {
-      delete params.sessionEntry.responseUsage;
-    } else {
-      params.sessionEntry.responseUsage = next;
-    }
+    params.sessionEntry.responseUsage = next;
     params.sessionEntry.updatedAt = Date.now();
     params.sessionStore[params.sessionKey] = params.sessionEntry;
     if (params.storePath) {
