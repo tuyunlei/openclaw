@@ -103,6 +103,7 @@ const TopicSessionModeSchema = z.enum(["disabled", "enabled"]).optional();
 export const FeishuGroupSchema = z
   .object({
     requireMention: z.boolean().optional(),
+    replyInThread: z.boolean().optional(),
     tools: ToolPolicySchema,
     skills: z.array(z.string()).optional(),
     enabled: z.boolean().optional(),
@@ -171,6 +172,7 @@ export const FeishuConfigSchema = z
     groupPolicy: GroupPolicySchema.optional().default("allowlist"),
     groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
     requireMention: z.boolean().optional().default(true),
+    replyInThread: z.boolean().optional(),
     groups: z.record(z.string(), FeishuGroupSchema.optional()).optional(),
     topicSessionMode: TopicSessionModeSchema,
     historyLimit: z.number().int().min(0).optional(),

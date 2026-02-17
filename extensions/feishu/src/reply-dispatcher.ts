@@ -6,10 +6,12 @@ import {
   type ReplyPayload,
   type RuntimeEnv,
 } from "openclaw/plugin-sdk";
+import type { FeishuConfig } from "./types.js";
 import { resolveFeishuAccount } from "./accounts.js";
 import { createFeishuClient } from "./client.js";
 import type { MentionTarget } from "./mention.js";
 import { buildMentionedCardContent } from "./mention.js";
+import { resolveFeishuGroupConfig } from "./policy.js";
 import { getFeishuRuntime } from "./runtime.js";
 import { sendMarkdownCardFeishu, sendMessageFeishu } from "./send.js";
 import { FeishuStreamingSession } from "./streaming-card.js";
@@ -36,6 +38,11 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
   const { cfg, agentId, chatId, replyToMessageId, mentionTargets, accountId } = params;
   const account = resolveFeishuAccount({ cfg, accountId });
   const prefixContext = createReplyPrefixContext({ cfg, agentId });
+
+  // Resolve replyInThread config: group-level > global-level > default (false)
+  const feishuCfg = cfg.channels?.feishu as FeishuConfig | undefined;
+  const groupConfig = resolveFeishuGroupConfig({ cfg: feishuCfg, groupId: chatId });
+  const replyInThread = groupConfig?.replyInThread ?? feishuCfg?.replyInThread ?? false;
 
   let typingState: TypingIndicatorState | null = null;
   const typingCallbacks = createTypingCallbacks({
@@ -173,6 +180,7 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
               replyToMessageId,
               mentions: first ? mentionTargets : undefined,
               accountId,
+              replyInThread: first ? replyInThread : undefined,
             });
             first = false;
           }
@@ -190,6 +198,7 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
               replyToMessageId,
               mentions: first ? mentionTargets : undefined,
               accountId,
+              replyInThread: first ? replyInThread : undefined,
             });
             first = false;
           }
