@@ -134,6 +134,14 @@ export function deriveGroupSessionPatch(params: {
   if (space) {
     patch.space = space;
   }
+  const groupMembers = params.ctx.GroupMembers?.trim();
+  if (groupMembers) {
+    patch.groupMembers = groupMembers;
+  }
+  const groupSystemPrompt = params.ctx.GroupSystemPrompt?.trim();
+  if (groupSystemPrompt) {
+    patch.groupSystemPrompt = groupSystemPrompt;
+  }
 
   const displayName = buildGroupDisplayName({
     provider: channel,

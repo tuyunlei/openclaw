@@ -93,6 +93,8 @@ export type SessionEntry = {
   subject?: string;
   groupChannel?: string;
   space?: string;
+  groupMembers?: string;
+  groupSystemPrompt?: string;
   origin?: SessionOrigin;
   deliveryContext?: DeliveryContext;
   lastChannel?: SessionChannelId;

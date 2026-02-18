@@ -1,10 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ReplyPayload } from "../auto-reply/types.js";
-import type { ChannelHeartbeatDeps } from "../channels/plugins/types.js";
-import type { OpenClawConfig } from "../config/config.js";
-import type { AgentDefaultsConfig } from "../config/types.agent-defaults.js";
-import type { OutboundSendDeps } from "./outbound/deliver.js";
 import {
   resolveAgentConfig,
   resolveAgentWorkspaceDir,
@@ -23,8 +18,11 @@ import {
 } from "../auto-reply/heartbeat.js";
 import { getReplyFromConfig } from "../auto-reply/reply.js";
 import { HEARTBEAT_TOKEN } from "../auto-reply/tokens.js";
+import type { ReplyPayload } from "../auto-reply/types.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
+import type { ChannelHeartbeatDeps } from "../channels/plugins/types.js";
 import { parseDurationMs } from "../cli/parse-duration.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
 import {
   canonicalizeMainSessionAlias,
@@ -36,6 +34,7 @@ import {
   saveSessionStore,
   updateSessionStore,
 } from "../config/sessions.js";
+import type { AgentDefaultsConfig } from "../config/types.agent-defaults.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getQueueSize } from "../process/command-queue.js";
 import { CommandLane } from "../process/lanes.js";
@@ -57,6 +56,7 @@ import {
   requestHeartbeatNow,
   setHeartbeatWakeHandler,
 } from "./heartbeat-wake.js";
+import type { OutboundSendDeps } from "./outbound/deliver.js";
 import { deliverOutboundPayloads } from "./outbound/deliver.js";
 import {
   resolveHeartbeatDeliveryTarget,
@@ -601,13 +601,39 @@ export async function runHeartbeatOnce(opts: {
     : hasCronEvents
       ? buildCronEventPrompt(cronEvents)
       : resolveHeartbeatPrompt(cfg, heartbeat);
-  const ctx = {
+  const entryProvider = entry?.lastChannel ?? "heartbeat";
+  const ctx: Record<string, unknown> = {
     Body: appendCronStyleCurrentTimeLine(prompt, cfg, startedAt),
     From: sender,
     To: sender,
-    Provider: hasExecCompletion ? "exec-event" : hasCronEvents ? "cron-event" : "heartbeat",
+    Provider: hasExecCompletion ? "exec-event" : hasCronEvents ? "cron-event" : entryProvider,
     SessionKey: sessionKey,
   };
+  // Replay group-chat context from the session entry so that the system prompt
+  // is byte-identical to a real message turn, enabling Anthropic prompt-cache hits.
+  if (entry) {
+    if (entry.chatType) {
+      ctx.ChatType = entry.chatType;
+    }
+    if (entry.lastAccountId) {
+      ctx.AccountId = entry.lastAccountId;
+    }
+    if (entry.subject) {
+      ctx.GroupSubject = entry.subject;
+    }
+    if (entry.groupMembers) {
+      ctx.GroupMembers = entry.groupMembers;
+    }
+    if (entry.groupSystemPrompt) {
+      ctx.GroupSystemPrompt = entry.groupSystemPrompt;
+    }
+    if (entry.groupChannel) {
+      ctx.GroupChannel = entry.groupChannel;
+    }
+    if (entry.space) {
+      ctx.GroupSpace = entry.space;
+    }
+  }
   if (!visibility.showAlerts && !visibility.showOk && !visibility.useIndicator) {
     emitHeartbeatEvent({
       status: "skipped",

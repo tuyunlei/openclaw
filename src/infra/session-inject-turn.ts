@@ -1,4 +1,3 @@
-import type { ReplyPayload } from "../auto-reply/types.js";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { appendCronStyleCurrentTimeLine } from "../agents/current-time.js";
 import { resolveEmbeddedSessionLane } from "../agents/pi-embedded-runner/lanes.js";
@@ -7,6 +6,7 @@ import { getReplyFromConfig } from "../auto-reply/reply.js";
 import { dispatchReplyFromConfig } from "../auto-reply/reply/dispatch-from-config.js";
 import { finalizeInboundContext } from "../auto-reply/reply/inbound-context.js";
 import { createReplyDispatcher } from "../auto-reply/reply/reply-dispatcher.js";
+import type { ReplyPayload } from "../auto-reply/types.js";
 import { loadConfig, type OpenClawConfig } from "../config/config.js";
 import {
   loadSessionStore,
@@ -144,11 +144,12 @@ export async function runSessionInjectTurn(opts: {
     ? opts.text.trim()
     : "You received a system event. Process it and respond.";
 
-  const ctx = {
+  const injectProvider = parsed.channel ?? entry.lastChannel ?? "system-inject";
+  const ctx: Record<string, unknown> = {
     Body: appendCronStyleCurrentTimeLine(bodyText, cfg, startedAt),
     From: sender,
     To: effectiveTo ?? sender,
-    Provider: "system-inject",
+    Provider: injectProvider,
     SessionKey: sessionKey,
     ConversationLabel: entry.origin?.label ?? entry.displayName,
     ChatType: entry.chatType,
@@ -156,6 +157,26 @@ export async function runSessionInjectTurn(opts: {
     OriginatingTo: parsed.to,
     MessageThreadId: parsed.threadId ?? effectiveThreadId,
   };
+  // Replay group-chat context from the session entry so that the system prompt
+  // is byte-identical to a real message turn, enabling Anthropic prompt-cache hits.
+  if (entry.lastAccountId) {
+    ctx.AccountId = entry.lastAccountId;
+  }
+  if (entry.subject) {
+    ctx.GroupSubject = entry.subject;
+  }
+  if (entry.groupMembers) {
+    ctx.GroupMembers = entry.groupMembers;
+  }
+  if (entry.groupSystemPrompt) {
+    ctx.GroupSystemPrompt = entry.groupSystemPrompt;
+  }
+  if (entry.groupChannel) {
+    ctx.GroupChannel = entry.groupChannel;
+  }
+  if (entry.space) {
+    ctx.GroupSpace = entry.space;
+  }
 
   let replyText: string | undefined;
   const dispatcher = createReplyDispatcher({
