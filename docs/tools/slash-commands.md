@@ -106,6 +106,7 @@ Text + native (when enabled):
 
 Text-only:
 
+- `/warm on|off` (toggle prompt cache keep-alive; adds/removes a ticker job that injects a heartbeat every 50 min)
 - `/compact [instructions]` (see [/concepts/compaction](/concepts/compaction))
 - `! <command>` (host-only; one at a time; use `!poll` + `!stop` for long-running jobs)
 - `!poll` (check output / status; accepts optional `sessionId`; `/bash poll` also works)

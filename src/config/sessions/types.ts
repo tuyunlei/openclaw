@@ -1,5 +1,5 @@
-import crypto from "node:crypto";
 import type { Skill } from "@mariozechner/pi-coding-agent";
+import crypto from "node:crypto";
 import type { ChatType } from "../../channels/chat-type.js";
 import type { ChannelId } from "../../channels/plugins/types.js";
 import type { DeliveryContext } from "../../utils/delivery-context.js";
@@ -58,6 +58,8 @@ export type SessionEntry = {
   groupActivation?: "mention" | "always";
   groupActivationNeedsSystemIntro?: boolean;
   sendPolicy?: "allow" | "deny";
+  /** Ticker job ID for prompt cache keep-alive. Set by /warm on, cleared by /warm off. */
+  warmJobId?: string;
   queueMode?:
     | "steer"
     | "followup"
