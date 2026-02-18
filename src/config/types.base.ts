@@ -158,12 +158,18 @@ export type DiagnosticsCacheTraceConfig = {
   includeSystem?: boolean;
 };
 
+export type DiagnosticsPayloadLogConfig = {
+  enabled?: boolean;
+  dir?: string;
+};
+
 export type DiagnosticsConfig = {
   enabled?: boolean;
   /** Optional ad-hoc diagnostics flags (e.g. "telegram.http"). */
   flags?: string[];
   otel?: DiagnosticsOtelConfig;
   cacheTrace?: DiagnosticsCacheTraceConfig;
+  payloadLog?: DiagnosticsPayloadLogConfig;
 };
 
 export type WebReconnectConfig = {

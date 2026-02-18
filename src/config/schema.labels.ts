@@ -22,6 +22,8 @@ export const FIELD_LABELS: Record<string, string> = {
   "diagnostics.cacheTrace.includeMessages": "Cache Trace Include Messages",
   "diagnostics.cacheTrace.includePrompt": "Cache Trace Include Prompt",
   "diagnostics.cacheTrace.includeSystem": "Cache Trace Include System",
+  "diagnostics.payloadLog.enabled": "Payload Log Enabled",
+  "diagnostics.payloadLog.dir": "Payload Log Directory",
   "agents.list.*.identity.avatar": "Identity Avatar",
   "agents.list.*.skills": "Agent Skill Filter",
   "gateway.remote.url": "Remote Gateway URL",
