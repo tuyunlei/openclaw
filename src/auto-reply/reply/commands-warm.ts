@@ -47,11 +47,14 @@ async function handleWarmOn(params: {
 
   const sessionKey = params.sessionKey;
   const jobId = `warm:${sessionKey}`;
+  const port = process.env.OPENCLAW_GATEWAY_PORT || "18789";
+  const gatewayUrl = `http://127.0.0.1:${port}`;
   const job = JSON.stringify({
     id: jobId,
     schedule: { every: "50m" },
     action: {
       mode: "inject",
+      gatewayUrl,
       sessionKey,
       message: "Cache keep-alive. Reply HEARTBEAT_OK.",
     },
