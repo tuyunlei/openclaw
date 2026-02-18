@@ -163,6 +163,13 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        payloadLog: z
+          .object({
+            enabled: z.boolean().optional(),
+            dir: z.string().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
