@@ -31,7 +31,6 @@ import {
   listChannelSupportedActions,
   resolveChannelMessageToolHints,
 } from "../../channel-tools.js";
-import { DEFAULT_CONTEXT_TOKENS } from "../../defaults.js";
 import { resolveOpenClawDocsPath } from "../../docs-path.js";
 import { isTimeoutError } from "../../failover-error.js";
 import { resolveImageSanitizationLimits } from "../../image-sanitization.js";
@@ -98,7 +97,6 @@ import {
   buildEmbeddedSystemPrompt,
   createSystemPromptOverride,
 } from "../system-prompt.js";
-import { installToolResultContextGuard } from "../tool-result-context-guard.js";
 import { splitSdkTools } from "../tool-split.js";
 import { describeUnknownError, mapThinkingLevel } from "../utils.js";
 import { flushPendingToolResultsAfterIdle } from "../wait-for-idle-before-flush.js";
@@ -496,7 +494,6 @@ export async function runEmbeddedAttempt(
 
     let sessionManager: ReturnType<typeof guardSessionManager> | undefined;
     let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
-    let removeToolResultContextGuard: (() => void) | undefined;
     try {
       await repairSessionFileIfNeeded({
         sessionFile: params.sessionFile,
@@ -592,15 +589,13 @@ export async function runEmbeddedAttempt(
         throw new Error("Embedded agent session missing");
       }
       const activeSession = session;
-      removeToolResultContextGuard = installToolResultContextGuard({
-        agent: activeSession.agent,
-        contextWindowTokens: Math.max(
-          1,
-          Math.floor(
-            params.model.contextWindow ?? params.model.maxTokens ?? DEFAULT_CONTEXT_TOKENS,
-          ),
-        ),
-      });
+      // Disabled: the tool-result context guard compacts old tool_result messages
+      // in-place before every LLM call within a turn. Because it modifies messages
+      // in the middle of the array, it breaks Anthropic's token-level prefix cache
+      // on every compaction round — causing ~60M tokens/month of cache write waste.
+      // Without this guard, Pi SDK auto-compaction (at contextWindow - reserveTokens)
+      // and the overflow recovery path in run.ts provide adequate safety nets.
+      // See: docs/compaction-mechanisms.md
       const cacheTrace = createCacheTrace({
         cfg: params.config,
         env: process.env,
@@ -1269,7 +1264,6 @@ export async function runEmbeddedAttempt(
       // flushPendingToolResults() fires while tools are still executing, inserting
       // synthetic "missing tool result" errors and causing silent agent failures.
       // See: https://github.com/openclaw/openclaw/issues/8643
-      removeToolResultContextGuard?.();
       await flushPendingToolResultsAfterIdle({
         agent: session?.agent,
         sessionManager,
