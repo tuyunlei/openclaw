@@ -1,5 +1,6 @@
 import type { SessionEntry } from "../../config/sessions.js";
 import type { CommandHandler } from "./commands-types.js";
+import { resolveCanonicalConfigPath } from "../../config/paths.js";
 import { updateSessionStore } from "../../config/sessions.js";
 import { execFileUtf8 } from "../../daemon/exec-file.js";
 import { logVerbose } from "../../globals.js";
@@ -49,12 +50,14 @@ async function handleWarmOn(params: {
   const jobId = `warm:${sessionKey}`;
   const port = process.env.OPENCLAW_GATEWAY_PORT || "18789";
   const gatewayUrl = `http://127.0.0.1:${port}`;
+  const tokenFrom = resolveCanonicalConfigPath();
   const job = JSON.stringify({
     id: jobId,
     schedule: { every: "50m" },
     action: {
       mode: "inject",
       gatewayUrl,
+      tokenFrom,
       sessionKey,
       message: "Cache keep-alive. Reply HEARTBEAT_OK.",
     },
