@@ -296,8 +296,9 @@ export const dispatchTelegramMessage = async ({
 
   let queuedFinal = false;
   const dispatchStartMs = Date.now();
-  log.debug("dispatchTelegramMessage enter", { chatId });
+  log.debug(`[timing] dispatchTelegramMessage start chatId=${chatId}`);
   try {
+    log.debug(`[timing] before dispatchReplyWithBufferedBlockDispatcher chatId=${chatId}`);
     ({ queuedFinal } = await dispatchReplyWithBufferedBlockDispatcher({
       ctx: ctxPayload,
       cfg,
@@ -310,8 +311,20 @@ export const dispatchTelegramMessage = async ({
             chatId,
             offsetMs: Date.now() - dispatchStartMs,
           });
+          log.debug(
+            `[timing] deliver enter kind=${info.kind} chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+          );
           if (info.kind === "final") {
+            log.debug(
+              `[timing] final branch start chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+            );
+            log.debug(
+              `[timing] before flushDraft chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+            );
             await flushDraft();
+            log.debug(
+              `[timing] after flushDraft chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+            );
             const hasMedia = Boolean(payload.mediaUrl) || (payload.mediaUrls?.length ?? 0) > 0;
             const previewMessageId = draftStream?.messageId();
             const finalText = payload.text;
@@ -330,7 +343,13 @@ export const dispatchTelegramMessage = async ({
               finalText.length <= draftMaxChars &&
               !payload.isError;
             if (canFinalizeViaPreviewEdit) {
+              log.debug(
+                `[timing] before draftStream.stop (preview edit) chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+              );
               await draftStream?.stop();
+              log.debug(
+                `[timing] after draftStream.stop (preview edit) chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+              );
               draftStoppedForPreviewEdit = true;
               if (
                 currentPreviewText &&
@@ -342,6 +361,9 @@ export const dispatchTelegramMessage = async ({
                 return;
               }
               try {
+                log.debug(
+                  `[timing] before editMessageTelegram (preview) chatId=${chatId} messageId=${previewMessageId} t=${Date.now() - dispatchStartMs}ms`,
+                );
                 await editMessageTelegram(chatId, previewMessageId, finalText, {
                   api: bot.api,
                   cfg,
@@ -349,8 +371,14 @@ export const dispatchTelegramMessage = async ({
                   linkPreview: telegramCfg.linkPreview,
                   buttons: previewButtons,
                 });
+                log.debug(
+                  `[timing] after editMessageTelegram (preview) chatId=${chatId} messageId=${previewMessageId} t=${Date.now() - dispatchStartMs}ms`,
+                );
                 finalizedViaPreviewMessage = true;
                 deliveryState.delivered = true;
+                log.debug(
+                  `[timing] final branch exit via preview edit chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+                );
                 log.debug("deliver callback exit", {
                   kind: info.kind,
                   chatId,
@@ -375,7 +403,13 @@ export const dispatchTelegramMessage = async ({
               );
             }
             if (!draftStoppedForPreviewEdit) {
+              log.debug(
+                `[timing] before draftStream.stop (post-preview) chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+              );
               await draftStream?.stop();
+              log.debug(
+                `[timing] after draftStream.stop (post-preview) chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+              );
             }
             // Check if stop() sent a message (debounce released on isFinal)
             // If so, edit that message instead of sending a new one
@@ -390,6 +424,9 @@ export const dispatchTelegramMessage = async ({
               !payload.isError
             ) {
               try {
+                log.debug(
+                  `[timing] before editMessageTelegram (post-stop) chatId=${chatId} messageId=${messageIdAfterStop} t=${Date.now() - dispatchStartMs}ms`,
+                );
                 await editMessageTelegram(chatId, messageIdAfterStop, finalText, {
                   api: bot.api,
                   cfg,
@@ -397,8 +434,14 @@ export const dispatchTelegramMessage = async ({
                   linkPreview: telegramCfg.linkPreview,
                   buttons: previewButtons,
                 });
+                log.debug(
+                  `[timing] after editMessageTelegram (post-stop) chatId=${chatId} messageId=${messageIdAfterStop} t=${Date.now() - dispatchStartMs}ms`,
+                );
                 finalizedViaPreviewMessage = true;
                 deliveryState.delivered = true;
+                log.debug(
+                  `[timing] final branch exit via post-stop edit chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+                );
                 log.debug("deliver callback exit", {
                   kind: info.kind,
                   chatId,
@@ -414,11 +457,21 @@ export const dispatchTelegramMessage = async ({
             }
           }
           if (info.kind === "block") {
+            log.debug(
+              `[timing] block branch before deliverTelegramReply chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+            );
           }
           if (info.kind === "tool") {
+            log.debug(
+              `[timing] tool branch before deliverTelegramReply chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+            );
           }
           if (info.kind === "final") {
+            log.debug(
+              `[timing] final branch before deliverTelegramReply chatId=${chatId} t=${Date.now() - dispatchStartMs}ms`,
+            );
           }
+          const deliverStartMs = Date.now();
           const result = await deliverReplies({
             ...deliveryBaseOptions,
             replies: [payload],
@@ -428,11 +481,23 @@ export const dispatchTelegramMessage = async ({
             deliveryState.delivered = true;
           }
           if (info.kind === "block") {
+            log.debug(
+              `[timing] block branch after deliverTelegramReply chatId=${chatId} elapsed=${Date.now() - deliverStartMs}ms t=${Date.now() - dispatchStartMs}ms`,
+            );
           }
           if (info.kind === "tool") {
+            log.debug(
+              `[timing] tool branch after deliverTelegramReply chatId=${chatId} elapsed=${Date.now() - deliverStartMs}ms t=${Date.now() - dispatchStartMs}ms`,
+            );
           }
           if (info.kind === "final") {
+            log.debug(
+              `[timing] final branch after deliverTelegramReply chatId=${chatId} elapsed=${Date.now() - deliverStartMs}ms t=${Date.now() - dispatchStartMs}ms`,
+            );
           }
+          log.debug(
+            `[timing] deliver exit kind=${info.kind} chatId=${chatId} elapsed=${Date.now() - startMs}ms t=${Date.now() - dispatchStartMs}ms`,
+          );
           log.debug("deliver callback exit", {
             kind: info.kind,
             chatId,
@@ -494,11 +559,18 @@ export const dispatchTelegramMessage = async ({
         onModelSelected,
       },
     }));
+    log.debug(
+      `[timing] after dispatchReplyWithBufferedBlockDispatcher chatId=${chatId} elapsed=${Date.now() - dispatchStartMs}ms queuedFinal=${queuedFinal}`,
+    );
   } finally {
     // Must stop() first to flush debounced content before clear() wipes state
+    log.debug(`[timing] finally before draftStream.stop chatId=${chatId}`);
     await draftStream?.stop();
+    log.debug(`[timing] finally after draftStream.stop chatId=${chatId}`);
     if (!finalizedViaPreviewMessage) {
+      log.debug(`[timing] finally before draftStream.clear chatId=${chatId}`);
       await draftStream?.clear();
+      log.debug(`[timing] finally after draftStream.clear chatId=${chatId}`);
     }
   }
   let sentFallback = false;
@@ -512,11 +584,9 @@ export const dispatchTelegramMessage = async ({
 
   const hasFinalResponse = queuedFinal || sentFallback;
   if (!hasFinalResponse) {
-    log.debug("dispatchTelegramMessage exit", {
-      chatId,
-      durationMs: Date.now() - dispatchStartMs,
-      hasFinalResponse: false,
-    });
+    log.debug(
+      `[timing] dispatchTelegramMessage exit chatId=${chatId} elapsed=${Date.now() - dispatchStartMs}ms hasFinalResponse=false`,
+    );
     clearGroupHistory();
     return;
   }
@@ -537,10 +607,8 @@ export const dispatchTelegramMessage = async ({
       });
     },
   });
-  log.debug("dispatchTelegramMessage exit", {
-    chatId,
-    durationMs: Date.now() - dispatchStartMs,
-    hasFinalResponse: true,
-  });
+  log.debug(
+    `[timing] dispatchTelegramMessage exit chatId=${chatId} elapsed=${Date.now() - dispatchStartMs}ms hasFinalResponse=true`,
+  );
   clearGroupHistory();
 };
