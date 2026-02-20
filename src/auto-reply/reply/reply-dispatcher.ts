@@ -1,10 +1,11 @@
 import type { HumanDelayConfig } from "../../config/types.js";
-import { sleep } from "../../utils.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
-import { registerDispatcher } from "./dispatcher-registry.js";
-import { normalizeReplyPayload, type NormalizeReplySkipReason } from "./normalize-reply.js";
 import type { ResponsePrefixContext } from "./response-prefix-template.js";
 import type { TypingController } from "./typing.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
+import { sleep } from "../../utils.js";
+import { registerDispatcher } from "./dispatcher-registry.js";
+import { normalizeReplyPayload, type NormalizeReplySkipReason } from "./normalize-reply.js";
 
 export type ReplyDispatchKind = "tool" | "block" | "final";
 
@@ -19,6 +20,8 @@ type ReplyDispatchDeliverer = (
   payload: ReplyPayload,
   info: { kind: ReplyDispatchKind },
 ) => Promise<void>;
+
+const log = createSubsystemLogger("delivery/dispatcher");
 
 const DEFAULT_HUMAN_DELAY_MIN_MS = 800;
 const DEFAULT_HUMAN_DELAY_MAX_MS = 2500;
@@ -135,6 +138,7 @@ export function createReplyDispatcher(options: ReplyDispatcherOptions): ReplyDis
     }
     queuedCounts[kind] += 1;
     pending += 1;
+    log.debug("enqueue", { kind });
 
     // Determine if we should add human-like delay (only for block replies after the first).
     const shouldDelay = kind === "block" && sentFirstBlock;
@@ -153,7 +157,12 @@ export function createReplyDispatcher(options: ReplyDispatcherOptions): ReplyDis
         }
         // Safe: deliver is called inside an async .then() callback, so even a synchronous
         // throw becomes a rejection that flows through .catch()/.finally(), ensuring cleanup.
+        const deliverStartedAt = Date.now();
         await options.deliver(normalized, { kind });
+        log.info("delivered", {
+          kind,
+          durationMs: Date.now() - deliverStartedAt,
+        });
       })
       .catch((err) => {
         options.onError?.(err, { kind });
