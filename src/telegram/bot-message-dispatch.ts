@@ -1,4 +1,10 @@
 import type { Bot } from "grammy";
+import type { OpenClawConfig, ReplyToMode, TelegramAccountConfig } from "../config/types.js";
+import type { RuntimeEnv } from "../runtime.js";
+import type { TelegramMessageContext } from "./bot-message-context.js";
+import type { TelegramBotOptions } from "./bot.js";
+import type { TelegramStreamMode } from "./bot/types.js";
+import type { TelegramInlineButtons } from "./button-types.js";
 import { resolveAgentDir } from "../agents/agent-scope.js";
 import {
   findModelInCatalog,
@@ -15,15 +21,10 @@ import { logAckFailure, logTypingFailure } from "../channels/logging.js";
 import { createReplyPrefixOptions } from "../channels/reply-prefix.js";
 import { createTypingCallbacks } from "../channels/typing.js";
 import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
-import type { OpenClawConfig, ReplyToMode, TelegramAccountConfig } from "../config/types.js";
 import { danger, logVerbose } from "../globals.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { getAgentScopedMediaLocalRoots } from "../media/local-roots.js";
-import type { RuntimeEnv } from "../runtime.js";
-import type { TelegramMessageContext } from "./bot-message-context.js";
-import type { TelegramBotOptions } from "./bot.js";
 import { deliverReplies } from "./bot/delivery.js";
-import type { TelegramStreamMode } from "./bot/types.js";
-import type { TelegramInlineButtons } from "./button-types.js";
 import { resolveTelegramDraftStreamingChunking } from "./draft-chunking.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { editMessageTelegram } from "./send.js";
@@ -33,6 +34,8 @@ const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
 
 /** Minimum chars before sending first streaming message (improves push notification UX) */
 const DRAFT_MIN_INITIAL_CHARS = 30;
+
+const log = createSubsystemLogger("telegram/dispatch");
 
 async function resolveStickerVisionSupport(cfg: OpenClawConfig, agentId: string) {
   try {
@@ -292,6 +295,8 @@ export const dispatchTelegramMessage = async ({
   };
 
   let queuedFinal = false;
+  const dispatchStartMs = Date.now();
+  log.debug("dispatchTelegramMessage enter", { chatId });
   try {
     ({ queuedFinal } = await dispatchReplyWithBufferedBlockDispatcher({
       ctx: ctxPayload,
@@ -299,6 +304,12 @@ export const dispatchTelegramMessage = async ({
       dispatcherOptions: {
         ...prefixOptions,
         deliver: async (payload, info) => {
+          const startMs = Date.now();
+          log.debug("deliver callback enter", {
+            kind: info.kind,
+            chatId,
+            offsetMs: Date.now() - dispatchStartMs,
+          });
           if (info.kind === "final") {
             await flushDraft();
             const hasMedia = Boolean(payload.mediaUrl) || (payload.mediaUrls?.length ?? 0) > 0;
@@ -340,6 +351,12 @@ export const dispatchTelegramMessage = async ({
                 });
                 finalizedViaPreviewMessage = true;
                 deliveryState.delivered = true;
+                log.debug("deliver callback exit", {
+                  kind: info.kind,
+                  chatId,
+                  durationMs: Date.now() - startMs,
+                  offsetMs: Date.now() - dispatchStartMs,
+                });
                 return;
               } catch (err) {
                 logVerbose(
@@ -382,6 +399,12 @@ export const dispatchTelegramMessage = async ({
                 });
                 finalizedViaPreviewMessage = true;
                 deliveryState.delivered = true;
+                log.debug("deliver callback exit", {
+                  kind: info.kind,
+                  chatId,
+                  durationMs: Date.now() - startMs,
+                  offsetMs: Date.now() - dispatchStartMs,
+                });
                 return;
               } catch (err) {
                 logVerbose(
@@ -389,6 +412,12 @@ export const dispatchTelegramMessage = async ({
                 );
               }
             }
+          }
+          if (info.kind === "block") {
+          }
+          if (info.kind === "tool") {
+          }
+          if (info.kind === "final") {
           }
           const result = await deliverReplies({
             ...deliveryBaseOptions,
@@ -398,6 +427,18 @@ export const dispatchTelegramMessage = async ({
           if (result.delivered) {
             deliveryState.delivered = true;
           }
+          if (info.kind === "block") {
+          }
+          if (info.kind === "tool") {
+          }
+          if (info.kind === "final") {
+          }
+          log.debug("deliver callback exit", {
+            kind: info.kind,
+            chatId,
+            durationMs: Date.now() - startMs,
+            offsetMs: Date.now() - dispatchStartMs,
+          });
         },
         onSkip: (_payload, info) => {
           if (info.reason !== "silent") {
@@ -471,6 +512,11 @@ export const dispatchTelegramMessage = async ({
 
   const hasFinalResponse = queuedFinal || sentFallback;
   if (!hasFinalResponse) {
+    log.debug("dispatchTelegramMessage exit", {
+      chatId,
+      durationMs: Date.now() - dispatchStartMs,
+      hasFinalResponse: false,
+    });
     clearGroupHistory();
     return;
   }
@@ -490,6 +536,11 @@ export const dispatchTelegramMessage = async ({
         error: err,
       });
     },
+  });
+  log.debug("dispatchTelegramMessage exit", {
+    chatId,
+    durationMs: Date.now() - dispatchStartMs,
+    hasFinalResponse: true,
   });
   clearGroupHistory();
 };

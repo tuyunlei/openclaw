@@ -5,6 +5,8 @@ import type {
   ReactionTypeEmoji,
 } from "@grammyjs/types";
 import { type ApiClientOptions, Bot, HttpError, InputFile } from "grammy";
+import type { RetryConfig } from "../infra/retry.js";
+import type { TelegramInlineButtons } from "./button-types.js";
 import { loadConfig } from "../config/config.js";
 import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
 import { logVerbose } from "../globals.js";
@@ -12,7 +14,6 @@ import { recordChannelActivity } from "../infra/channel-activity.js";
 import { isDiagnosticFlagEnabled } from "../infra/diagnostic-flags.js";
 import { formatErrorMessage, formatUncaughtError } from "../infra/errors.js";
 import { createTelegramRetryRunner } from "../infra/retry-policy.js";
-import type { RetryConfig } from "../infra/retry.js";
 import { redactSensitiveText } from "../logging/redact.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { mediaKindFromMime } from "../media/constants.js";
@@ -22,7 +23,6 @@ import { loadWebMedia } from "../web/media.js";
 import { type ResolvedTelegramAccount, resolveTelegramAccount } from "./accounts.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { buildTelegramThreadParams } from "./bot/helpers.js";
-import type { TelegramInlineButtons } from "./button-types.js";
 import { splitTelegramCaption } from "./caption.js";
 import { resolveTelegramFetch } from "./fetch.js";
 import { renderTelegramHtmlText } from "./format.js";
@@ -87,6 +87,7 @@ const MESSAGE_NOT_MODIFIED_RE =
   /400:\s*Bad Request:\s*message is not modified|MESSAGE_NOT_MODIFIED/i;
 const CHAT_NOT_FOUND_RE = /400: Bad Request: chat not found/i;
 const diagLogger = createSubsystemLogger("telegram/diagnostic");
+const deliveryLogger = createSubsystemLogger("telegram/delivery");
 
 function createTelegramHttpLogger(cfg: ReturnType<typeof loadConfig>) {
   const enabled = isDiagnosticFlagEnabled("telegram.http", cfg);
@@ -431,6 +432,7 @@ export async function sendMessageTelegram(
   text: string,
   opts: TelegramSendOpts = {},
 ): Promise<TelegramSendResult> {
+  const startedAt = Date.now();
   const { cfg, account, api } = resolveTelegramApiContext(opts);
   const target = parseTelegramTarget(to);
   const chatId = normalizeChatId(target.chatId);
@@ -494,8 +496,8 @@ export async function sendMessageTelegram(
         return await withTelegramHtmlParseFallback({
           label,
           verbose: opts.verbose,
-          requestHtml: (retryLabel) =>
-            requestWithChatNotFound(
+          requestHtml: async (retryLabel) => {
+            const res = await requestWithChatNotFound(
               () =>
                 api.sendMessage(
                   chatId,
@@ -503,18 +505,21 @@ export async function sendMessageTelegram(
                   sendParams as Parameters<typeof api.sendMessage>[2],
                 ),
               retryLabel,
-            ),
-          requestPlain: (retryLabel) => {
+            );
+            return res;
+          },
+          requestPlain: async (retryLabel) => {
             const plainParams = hasBaseParams
               ? (baseParams as Parameters<typeof api.sendMessage>[2])
               : undefined;
-            return requestWithChatNotFound(
+            const res = await requestWithChatNotFound(
               () =>
                 plainParams
                   ? api.sendMessage(chatId, fallbackText ?? rawText, plainParams)
                   : api.sendMessage(chatId, fallbackText ?? rawText),
               retryLabel,
             );
+            return res;
           },
         });
       },
@@ -682,12 +687,23 @@ export async function sendMessageTelegram(
           : undefined;
       const textRes = await sendTelegramText(followUpText, textParams);
       // Return the text message ID as the "main" message (it's the actual content).
+      const messageId = String(textRes?.message_id ?? mediaMessageId);
+      deliveryLogger.info("sendMessageTelegram succeeded", {
+        chatId: resolvedChatId,
+        messageId,
+        durationMs: Date.now() - startedAt,
+      });
       return {
-        messageId: String(textRes?.message_id ?? mediaMessageId),
+        messageId,
         chatId: resolvedChatId,
       };
     }
 
+    deliveryLogger.info("sendMessageTelegram succeeded", {
+      chatId: resolvedChatId,
+      messageId: mediaMessageId,
+      durationMs: Date.now() - startedAt,
+    });
     return { messageId: mediaMessageId, chatId: resolvedChatId };
   }
 
@@ -711,7 +727,13 @@ export async function sendMessageTelegram(
     accountId: account.accountId,
     direction: "outbound",
   });
-  return { messageId, chatId: String(res?.chat?.id ?? chatId) };
+  const resolvedChatId = String(res?.chat?.id ?? chatId);
+  deliveryLogger.info("sendMessageTelegram succeeded", {
+    chatId: resolvedChatId,
+    messageId,
+    durationMs: Date.now() - startedAt,
+  });
+  return { messageId, chatId: resolvedChatId };
 }
 
 export async function reactMessageTelegram(
@@ -802,6 +824,7 @@ export async function editMessageTelegram(
   text: string,
   opts: TelegramEditOpts = {},
 ): Promise<{ ok: true; messageId: string; chatId: string }> {
+  const startedAt = Date.now();
   const { cfg, account, api } = resolveTelegramApiContext({
     ...opts,
     cfg: opts.cfg,
@@ -881,7 +904,11 @@ export async function editMessageTelegram(
     }
   }
 
-  logVerbose(`[telegram] Edited message ${messageId} in chat ${chatId}`);
+  deliveryLogger.info("editMessageTelegram succeeded", {
+    chatId,
+    messageId,
+    durationMs: Date.now() - startedAt,
+  });
   return { ok: true, messageId: String(messageId), chatId };
 }
 

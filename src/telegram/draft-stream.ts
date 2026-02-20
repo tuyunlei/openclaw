@@ -1,9 +1,12 @@
 import type { Bot } from "grammy";
 import { createDraftStreamLoop } from "../channels/draft-stream-loop.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { buildTelegramThreadParams, type TelegramThreadSpec } from "./bot/helpers.js";
 
 const TELEGRAM_STREAM_MAX_CHARS = 4096;
 const DEFAULT_THROTTLE_MS = 1000;
+
+const log = createSubsystemLogger("telegram/draft-stream");
 
 export type TelegramDraftStream = {
   update: (text: string) => void;
@@ -77,11 +80,23 @@ export function createTelegramDraftStream(params: {
     lastSentText = trimmed;
     try {
       if (typeof streamMessageId === "number") {
+        const editStart = Date.now();
         await params.api.editMessageText(chatId, streamMessageId, trimmed);
+        log.info("editMessageText succeeded", {
+          chatId,
+          messageId: streamMessageId,
+          durationMs: Date.now() - editStart,
+        });
         return true;
       }
+      const sendStart = Date.now();
       const sent = await params.api.sendMessage(chatId, trimmed, replyParams);
       const sentMessageId = sent?.message_id;
+      log.info("sendMessage succeeded", {
+        chatId,
+        messageId: typeof sentMessageId === "number" ? sentMessageId : undefined,
+        durationMs: Date.now() - sendStart,
+      });
       if (typeof sentMessageId !== "number" || !Number.isFinite(sentMessageId)) {
         stopped = true;
         params.warn?.("telegram stream preview stopped (missing message id from sendMessage)");
