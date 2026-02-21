@@ -1,9 +1,11 @@
 import type { Bot } from "grammy";
 import { createDraftStreamLoop } from "../channels/draft-stream-loop.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { buildTelegramThreadParams, type TelegramThreadSpec } from "./bot/helpers.js";
 
 const TELEGRAM_STREAM_MAX_CHARS = 4096;
 const DEFAULT_THROTTLE_MS = 1000;
+const draftLog = createSubsystemLogger("telegram/draft-stream");
 
 export type TelegramDraftStream = {
   update: (text: string) => void;
@@ -91,6 +93,7 @@ export function createTelegramDraftStream(params: {
     lastSentText = renderedText;
     lastSentParseMode = renderedParseMode;
     try {
+      const startMs = Date.now();
       if (typeof streamMessageId === "number") {
         if (renderedParseMode) {
           await params.api.editMessageText(chatId, streamMessageId, renderedText, {
@@ -99,6 +102,9 @@ export function createTelegramDraftStream(params: {
         } else {
           await params.api.editMessageText(chatId, streamMessageId, renderedText);
         }
+        draftLog.info(
+          `chatId=${chatId} messageId=${streamMessageId} action=edit durationMs=${Date.now() - startMs}`,
+        );
         return true;
       }
       const sendParams = renderedParseMode
@@ -115,6 +121,9 @@ export function createTelegramDraftStream(params: {
         return false;
       }
       streamMessageId = Math.trunc(sentMessageId);
+      draftLog.info(
+        `chatId=${chatId} messageId=${streamMessageId} action=send durationMs=${Date.now() - startMs}`,
+      );
       return true;
     } catch (err) {
       stopped = true;
