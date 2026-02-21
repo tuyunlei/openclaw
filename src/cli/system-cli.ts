@@ -6,17 +6,22 @@ import { theme } from "../terminal/theme.js";
 import type { GatewayRpcOpts } from "./gateway-rpc.js";
 import { addGatewayClientOptions, callGatewayFromCli } from "./gateway-rpc.js";
 
-type SystemEventOpts = GatewayRpcOpts & { text?: string; mode?: string; json?: boolean };
+type SystemEventOpts = GatewayRpcOpts & {
+  text?: string;
+  mode?: string;
+  session?: string;
+  json?: boolean;
+};
 
-const normalizeWakeMode = (raw: unknown) => {
+const normalizeWakeMode = (raw: unknown): "now" | "next-heartbeat" | "agent-turn" => {
   const mode = typeof raw === "string" ? raw.trim() : "";
   if (!mode) {
-    return "next-heartbeat" as const;
+    return "next-heartbeat";
   }
-  if (mode === "now" || mode === "next-heartbeat") {
+  if (mode === "now" || mode === "next-heartbeat" || mode === "agent-turn") {
     return mode;
   }
-  throw new Error("--mode must be now or next-heartbeat");
+  throw new Error("--mode must be now, next-heartbeat, or agent-turn");
 };
 
 export function registerSystemCli(program: Command) {
@@ -34,7 +39,8 @@ export function registerSystemCli(program: Command) {
       .command("event")
       .description("Enqueue a system event and optionally trigger a heartbeat")
       .requiredOption("--text <text>", "System event text")
-      .option("--mode <mode>", "Wake mode (now|next-heartbeat)", "next-heartbeat")
+      .option("--mode <mode>", "Wake mode (now|next-heartbeat|agent-turn)", "next-heartbeat")
+      .option("--session <sessionKey>", "Target session key (required for agent-turn mode)")
       .option("--json", "Output JSON", false),
   ).action(async (opts: SystemEventOpts) => {
     try {
@@ -43,7 +49,14 @@ export function registerSystemCli(program: Command) {
         throw new Error("--text is required");
       }
       const mode = normalizeWakeMode(opts.mode);
-      const result = await callGatewayFromCli("wake", opts, { mode, text }, { expectFinal: false });
+      if (mode === "agent-turn" && !opts.session) {
+        throw new Error("--session is required for agent-turn mode");
+      }
+      const wakeParams: Record<string, unknown> = { mode, text };
+      if (opts.session) {
+        wakeParams.sessionKey = opts.session;
+      }
+      const result = await callGatewayFromCli("wake", opts, wakeParams, { expectFinal: false });
       if (opts.json) {
         defaultRuntime.log(JSON.stringify(result, null, 2));
       } else {

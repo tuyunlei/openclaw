@@ -31,7 +31,7 @@ export const cronHandlers: GatewayRequestHandlers = {
       return;
     }
     const p = params as {
-      mode: "now" | "next-heartbeat";
+      mode: "now" | "next-heartbeat" | "agent-turn";
       text: string;
       sessionKey?: string;
     };
