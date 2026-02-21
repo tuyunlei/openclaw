@@ -1,13 +1,13 @@
 import type { NormalizedUsage } from "../../agents/usage.js";
+import { getChannelDock } from "../../channels/dock.js";
 import type { ChannelId, ChannelThreadingToolContext } from "../../channels/plugins/types.js";
+import { normalizeAnyChannelId, normalizeChannelId } from "../../channels/registry.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { isReasoningTagProvider } from "../../utils/provider-utils.js";
+import { estimateUsageCost, formatTokenCount, formatUsd } from "../../utils/usage-format.js";
 import type { TemplateContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
 import type { FollowupRun } from "./queue.js";
-import { getChannelDock } from "../../channels/dock.js";
-import { normalizeAnyChannelId, normalizeChannelId } from "../../channels/registry.js";
-import { isReasoningTagProvider } from "../../utils/provider-utils.js";
-import { estimateUsageCost, formatTokenCount, formatUsd } from "../../utils/usage-format.js";
 
 const BUN_FETCH_SOCKET_ERROR_RE = /socket connection was closed unexpectedly/i;
 
@@ -80,6 +80,7 @@ export const formatResponseUsageLine = (params: {
     cacheRead: number;
     cacheWrite: number;
   };
+  contextTokens?: number;
 }): string | null => {
   const usage = params.usage;
   if (!usage) {
@@ -102,6 +103,20 @@ export const formatResponseUsageLine = (params: {
     cacheParts.push(`${formatTokenCount(cacheWrite)} cw`);
   }
   const cacheLabel = cacheParts.length > 0 ? ` / ${cacheParts.join(" / ")}` : "";
+
+  // Calculate context usage percentage
+  const contextLabel = (() => {
+    if (!params.contextTokens || typeof input !== "number") {
+      return null;
+    }
+    const totalTokens = input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+    const pct = (totalTokens / params.contextTokens) * 100;
+    if (!Number.isFinite(pct)) {
+      return null;
+    }
+    return `${pct.toFixed(0)}% ctx`;
+  })();
+
   const cost =
     params.showCost && typeof input === "number" && typeof output === "number"
       ? estimateUsageCost({
@@ -115,8 +130,9 @@ export const formatResponseUsageLine = (params: {
         })
       : undefined;
   const costLabel = params.showCost ? formatUsd(cost) : undefined;
-  const suffix = costLabel ? ` · est ${costLabel}` : "";
-  return `Usage: ${inputLabel} in / ${outputLabel} out${cacheLabel}${suffix}`;
+  const contextSuffix = contextLabel ? ` · ${contextLabel}` : "";
+  const costSuffix = costLabel ? ` · est ${costLabel}` : "";
+  return `Usage: ${inputLabel} in / ${outputLabel} out${cacheLabel}${contextSuffix}${costSuffix}`;
 };
 
 export const appendUsageLine = (payloads: ReplyPayload[], line: string): ReplyPayload[] => {
