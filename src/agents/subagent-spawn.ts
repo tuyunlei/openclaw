@@ -25,6 +25,7 @@ export type SpawnSubagentParams = {
   thinking?: string;
   runTimeoutSeconds?: number;
   cleanup?: "delete" | "keep";
+  announceMode?: "notify" | "workflow";
   expectsCompletionMessage?: boolean;
 };
 
@@ -292,6 +293,7 @@ export async function spawnSubagentDirect(
     label: label || undefined,
     model: resolvedModel,
     runTimeoutSeconds,
+    announceMode: params.announceMode,
     expectsCompletionMessage: params.expectsCompletionMessage === true,
   });
 

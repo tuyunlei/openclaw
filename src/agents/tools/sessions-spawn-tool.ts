@@ -6,15 +6,27 @@ import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam } from "./common.js";
 
 const SessionsSpawnToolSchema = Type.Object({
-  task: Type.String(),
-  label: Type.Optional(Type.String()),
-  agentId: Type.Optional(Type.String()),
-  model: Type.Optional(Type.String()),
-  thinking: Type.Optional(Type.String()),
-  runTimeoutSeconds: Type.Optional(Type.Number({ minimum: 0 })),
+  task: Type.String({ description: "The task/prompt for the sub-agent to execute." }),
+  label: Type.Optional(
+    Type.String({ description: "Short human-readable label shown in status updates." }),
+  ),
+  agentId: Type.Optional(Type.String({ description: "Target agent ID (default: same agent)." })),
+  model: Type.Optional(Type.String({ description: "Model override for the sub-agent run." })),
+  thinking: Type.Optional(
+    Type.String({ description: "Thinking level override (low/medium/high)." }),
+  ),
+  runTimeoutSeconds: Type.Optional(
+    Type.Number({ minimum: 0, description: "Max runtime in seconds before the run is killed." }),
+  ),
   // Back-compat: older callers used timeoutSeconds for this tool.
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 0 })),
-  cleanup: optionalStringEnum(["delete", "keep"] as const),
+  cleanup: optionalStringEnum(["delete", "keep"] as const, {
+    description: "Session cleanup after completion: delete removes transcript, keep preserves it.",
+  }),
+  announceMode: optionalStringEnum(["notify", "workflow"] as const, {
+    description:
+      'How completion is announced. "notify" (default): result is sent directly to the user channel and the requester agent is asked to relay it. "workflow": result is only injected into the requester session as internal context — the requester agent decides what to do next based on its own workflow logic, without any direct user-visible message. Use "workflow" for multi-step orchestration where the requester agent must process the result before responding.',
+  }),
 });
 
 export function createSessionsSpawnTool(opts?: {
@@ -34,7 +46,7 @@ export function createSessionsSpawnTool(opts?: {
     label: "Sessions",
     name: "sessions_spawn",
     description:
-      "Spawn a background sub-agent run in an isolated session and announce the result back to the requester chat.",
+      'Spawn a background sub-agent run in an isolated session. On completion, the result is announced back. Default announceMode "notify" sends the result directly to the user channel. Use announceMode "workflow" for multi-step orchestration: result is injected as internal context only, letting the requester agent control the next step.',
     parameters: SessionsSpawnToolSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
@@ -45,6 +57,7 @@ export function createSessionsSpawnTool(opts?: {
       const thinkingOverrideRaw = readStringParam(params, "thinking");
       const cleanup =
         params.cleanup === "keep" || params.cleanup === "delete" ? params.cleanup : "keep";
+      const announceMode = params.announceMode === "workflow" ? "workflow" : "notify";
       // Back-compat: older callers used timeoutSeconds for this tool.
       const timeoutSecondsCandidate =
         typeof params.runTimeoutSeconds === "number"
@@ -66,6 +79,7 @@ export function createSessionsSpawnTool(opts?: {
           thinking: thinkingOverrideRaw,
           runTimeoutSeconds,
           cleanup,
+          announceMode,
           expectsCompletionMessage: true,
         },
         {

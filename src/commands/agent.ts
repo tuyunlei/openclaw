@@ -507,6 +507,7 @@ export async function agentCommand(
     }
     const sessionFile = resolveSessionFilePath(sessionId, sessionEntry, {
       agentId: sessionAgentId,
+      topicId: sessionEntry?.lastThreadId,
     });
 
     const startedAt = Date.now();

@@ -434,6 +434,7 @@ async function sendSubagentAnnounceDirectly(params: {
   triggerMessage: string;
   completionMessage?: string;
   expectsCompletionMessage: boolean;
+  announceMode?: "notify" | "workflow";
   directIdempotencyKey: string;
   completionDirectOrigin?: DeliveryContext;
   directOrigin?: DeliveryContext;
@@ -461,6 +462,7 @@ async function sendSubagentAnnounceDirectly(params: {
 
     if (
       params.expectsCompletionMessage &&
+      params.announceMode !== "workflow" &&
       hasCompletionDirectTarget &&
       params.completionMessage?.trim()
     ) {
@@ -562,6 +564,7 @@ async function deliverSubagentAnnouncement(params: {
   targetRequesterSessionKey: string;
   requesterIsSubagent: boolean;
   expectsCompletionMessage: boolean;
+  announceMode?: "notify" | "workflow";
   directIdempotencyKey: string;
 }): Promise<SubagentAnnounceDeliveryResult> {
   // Non-completion mode mirrors historical behavior: try queued/steered delivery first,
@@ -591,6 +594,7 @@ async function deliverSubagentAnnouncement(params: {
     directOrigin: params.directOrigin,
     requesterIsSubagent: params.requesterIsSubagent,
     expectsCompletionMessage: params.expectsCompletionMessage,
+    announceMode: params.announceMode,
   });
   if (direct.delivered || !params.expectsCompletionMessage) {
     return direct;
@@ -721,7 +725,11 @@ function buildAnnounceReplyInstruction(params: {
   requesterIsSubagent: boolean;
   announceType: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
+  announceMode?: "notify" | "workflow";
 }): string {
+  if (params.announceMode === "workflow") {
+    return `A sub-agent task completed. Process the result above according to your workflow instructions. Do not send a user-facing update unless your workflow explicitly requires it at this step. Keep internal context private (don't mention system/log/stats/session details or announce type).`;
+  }
   if (params.expectsCompletionMessage) {
     return `A completed ${params.announceType} is ready for user delivery. Convert the result above into your normal assistant voice and send that user-facing update now. Keep this internal context private (don't mention system/log/stats/session details or announce type).`;
   }
@@ -752,9 +760,11 @@ export async function runSubagentAnnounceFlow(params: {
   outcome?: SubagentRunOutcome;
   announceType?: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
+  announceMode?: "notify" | "workflow";
 }): Promise<boolean> {
   let didAnnounce = false;
   const expectsCompletionMessage = params.expectsCompletionMessage === true;
+  const announceMode = params.announceMode === "workflow" ? "workflow" : "notify";
   let shouldDeleteChildSession = params.cleanup === "delete";
   try {
     let targetRequesterSessionKey = params.requesterSessionKey;
@@ -932,6 +942,7 @@ export async function runSubagentAnnounceFlow(params: {
       requesterIsSubagent,
       announceType,
       expectsCompletionMessage,
+      announceMode,
     });
     const statsLine = await buildCompactAnnounceStatsLine({
       sessionKey: params.childSessionKey,
@@ -979,6 +990,7 @@ export async function runSubagentAnnounceFlow(params: {
       targetRequesterSessionKey,
       requesterIsSubagent,
       expectsCompletionMessage: expectsCompletionMessage,
+      announceMode,
       directIdempotencyKey,
     });
     didAnnounce = delivery.delivered;

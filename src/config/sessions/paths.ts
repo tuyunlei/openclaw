@@ -195,14 +195,14 @@ export function resolveSessionTranscriptPath(
 export function resolveSessionFilePath(
   sessionId: string,
   entry?: { sessionFile?: string },
-  opts?: SessionFilePathOptions,
+  opts?: SessionFilePathOptions & { topicId?: string | number },
 ): string {
   const sessionsDir = resolveSessionsDir(opts);
   const candidate = entry?.sessionFile?.trim();
   if (candidate) {
     return resolvePathWithinSessionsDir(sessionsDir, candidate, { agentId: opts?.agentId });
   }
-  return resolveSessionTranscriptPathInDir(sessionId, sessionsDir);
+  return resolveSessionTranscriptPathInDir(sessionId, sessionsDir, opts?.topicId);
 }
 
 export function resolveStorePath(store?: string, opts?: { agentId?: string }) {
