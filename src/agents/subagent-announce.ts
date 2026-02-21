@@ -481,6 +481,34 @@ async function sendSubagentAnnounceDirectly(params: {
         timeoutMs: 15_000,
       });
 
+      // Also inject into the requester session to trigger an agent turn,
+      // so automated workflows can process the sub-agent completion.
+      try {
+        const followupOrigin =
+          normalizeDeliveryContext(params.directOrigin) ??
+          normalizeDeliveryContext(params.completionDirectOrigin);
+        const followupThreadId =
+          followupOrigin?.threadId != null && followupOrigin.threadId !== ""
+            ? String(followupOrigin.threadId)
+            : undefined;
+        await callGateway({
+          method: "agent",
+          params: {
+            sessionKey: canonicalRequesterSessionKey,
+            message: params.triggerMessage,
+            deliver: true,
+            channel: followupOrigin?.channel,
+            accountId: followupOrigin?.accountId,
+            to: followupOrigin?.to,
+            threadId: followupThreadId,
+            idempotencyKey: `${params.directIdempotencyKey}:followup`,
+          },
+          timeoutMs: 15_000,
+        });
+      } catch {
+        // Best-effort: completion was already delivered to channel above.
+      }
+
       return {
         delivered: true,
         path: "direct",
