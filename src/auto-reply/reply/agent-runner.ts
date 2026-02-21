@@ -4,7 +4,7 @@ import { lookupContextTokens } from "../../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 import { isCliProvider } from "../../agents/model-selection.js";
 import { queueEmbeddedPiMessage } from "../../agents/pi-embedded.js";
-import { hasNonzeroUsage } from "../../agents/usage.js";
+import { hasNonzeroUsage, normalizeUsage } from "../../agents/usage.js";
 import {
   resolveAgentIdFromSessionKey,
   resolveSessionFilePath,
@@ -521,9 +521,15 @@ export async function runReplyAgent(params: {
         model: modelUsed,
         config: cfg,
       });
-      const totalTokens = (usage?.input ?? 0) + (usage?.cacheRead ?? 0) + (usage?.cacheWrite ?? 0);
+      const lastCallUsage = runResult.meta?.agentMeta?.lastCallUsage
+        ? normalizeUsage(runResult.meta.agentMeta.lastCallUsage)
+        : undefined;
+      const ctxUsage = lastCallUsage ?? usage;
+      const totalTokens =
+        (ctxUsage?.input ?? 0) + (ctxUsage?.cacheRead ?? 0) + (ctxUsage?.cacheWrite ?? 0);
       let formatted = formatResponseUsageLine({
         usage,
+        lastCallUsage,
         showCost,
         costConfig,
         contextTokens: totalTokens > 0 ? contextTokensUsed : undefined,

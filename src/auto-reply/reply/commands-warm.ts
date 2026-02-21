@@ -1,10 +1,10 @@
-import type { SessionEntry } from "../../config/sessions.js";
-import type { CommandHandler } from "./commands-types.js";
 import { resolveCanonicalConfigPath } from "../../config/paths.js";
+import type { SessionEntry } from "../../config/sessions.js";
 import { updateSessionStore } from "../../config/sessions.js";
 import { execFileUtf8 } from "../../daemon/exec-file.js";
 import { logVerbose } from "../../globals.js";
 import { parseWarmCommand } from "../warm-command.js";
+import type { CommandHandler } from "./commands-types.js";
 
 export const handleWarmCommand: CommandHandler = async (params, allowTextCommands) => {
   if (!allowTextCommands) {

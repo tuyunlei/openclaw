@@ -73,6 +73,11 @@ export const formatBunFetchSocketError = (message: string) => {
 
 export const formatResponseUsageLine = (params: {
   usage?: NormalizedUsage;
+  /** Usage from the last individual API call (not accumulated). When provided,
+   *  context-window percentage is derived from this instead of the accumulated
+   *  `usage`, which sums tokens across all API calls in a run and therefore
+   *  overstates the actual current context size. */
+  lastCallUsage?: NormalizedUsage;
   showCost: boolean;
   costConfig?: {
     input: number;
@@ -104,12 +109,19 @@ export const formatResponseUsageLine = (params: {
   }
   const cacheLabel = cacheParts.length > 0 ? ` / ${cacheParts.join(" / ")}` : "";
 
-  // Calculate context usage percentage
+  // Calculate context usage percentage.
+  // Prefer lastCallUsage (single API call) over accumulated usage so the
+  // percentage reflects actual current context size, not the sum of all calls.
   const contextLabel = (() => {
-    if (!params.contextTokens || typeof input !== "number") {
+    if (!params.contextTokens) {
       return null;
     }
-    const totalTokens = input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+    const ctxUsage = params.lastCallUsage ?? usage;
+    const ctxInput = ctxUsage.input ?? 0;
+    if (typeof ctxInput !== "number") {
+      return null;
+    }
+    const totalTokens = ctxInput + (ctxUsage.cacheRead ?? 0) + (ctxUsage.cacheWrite ?? 0);
     const pct = (totalTokens / params.contextTokens) * 100;
     if (!Number.isFinite(pct)) {
       return null;
