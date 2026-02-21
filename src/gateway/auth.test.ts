@@ -34,6 +34,7 @@ describe("gateway auth", () => {
       }),
     ).toMatchObject({
       mode: "password",
+      modeSource: "password",
       token: "env-token",
       password: "env-password",
     });
@@ -49,9 +50,39 @@ describe("gateway auth", () => {
         } as NodeJS.ProcessEnv,
       }),
     ).toMatchObject({
-      mode: "none",
+      mode: "token",
+      modeSource: "default",
       token: undefined,
       password: undefined,
+    });
+  });
+
+  it("resolves explicit auth mode none from config", () => {
+    expect(
+      resolveGatewayAuth({
+        authConfig: { mode: "none" },
+        env: {} as NodeJS.ProcessEnv,
+      }),
+    ).toMatchObject({
+      mode: "none",
+      modeSource: "config",
+      token: undefined,
+      password: undefined,
+    });
+  });
+
+  it("marks mode source as override when runtime mode override is provided", () => {
+    expect(
+      resolveGatewayAuth({
+        authConfig: { mode: "password", password: "config-password" },
+        authOverride: { mode: "token" },
+        env: {} as NodeJS.ProcessEnv,
+      }),
+    ).toMatchObject({
+      mode: "token",
+      modeSource: "override",
+      token: undefined,
+      password: "config-password",
     });
   });
 
@@ -88,6 +119,34 @@ describe("gateway auth", () => {
     });
     expect(res.ok).toBe(false);
     expect(res.reason).toBe("token_missing_config");
+  });
+
+  it("allows explicit auth mode none", async () => {
+    const res = await authorizeGatewayConnect({
+      auth: { mode: "none", allowTailscale: false },
+      connectAuth: null,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.method).toBe("none");
+  });
+
+  it("keeps none mode authoritative even when token is present", async () => {
+    const auth = resolveGatewayAuth({
+      authConfig: { mode: "none", token: "configured-token" },
+      env: {} as NodeJS.ProcessEnv,
+    });
+    expect(auth).toMatchObject({
+      mode: "none",
+      modeSource: "config",
+      token: "configured-token",
+    });
+
+    const res = await authorizeGatewayConnect({
+      auth,
+      connectAuth: null,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.method).toBe("none");
   });
 
   it("reports missing and mismatched password reasons", async () => {
@@ -129,11 +188,34 @@ describe("gateway auth", () => {
     expect(res.method).toBe("token");
   });
 
-  it("allows tailscale identity to satisfy token mode auth", async () => {
+  it("does not allow tailscale identity to satisfy token mode auth by default", async () => {
     const res = await authorizeGatewayConnect({
       auth: { mode: "token", token: "secret", allowTailscale: true },
       connectAuth: null,
       tailscaleWhois: async () => ({ login: "peter", name: "Peter" }),
+      req: {
+        socket: { remoteAddress: "127.0.0.1" },
+        headers: {
+          host: "gateway.local",
+          "x-forwarded-for": "100.64.0.1",
+          "x-forwarded-proto": "https",
+          "x-forwarded-host": "ai-hub.bone-egret.ts.net",
+          "tailscale-user-login": "peter",
+          "tailscale-user-name": "Peter",
+        },
+      } as never,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe("token_missing");
+  });
+
+  it("allows tailscale identity when header auth is explicitly enabled", async () => {
+    const res = await authorizeGatewayConnect({
+      auth: { mode: "token", token: "secret", allowTailscale: true },
+      connectAuth: null,
+      tailscaleWhois: async () => ({ login: "peter", name: "Peter" }),
+      allowTailscaleHeaderAuth: true,
       req: {
         socket: { remoteAddress: "127.0.0.1" },
         headers: {

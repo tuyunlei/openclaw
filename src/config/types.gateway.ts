@@ -70,13 +70,17 @@ export type GatewayControlUiConfig = {
   root?: string;
   /** Allowed browser origins for Control UI/WebChat websocket connections. */
   allowedOrigins?: string[];
-  /** Allow token-only auth over insecure HTTP (default: false). */
+  /**
+   * Insecure-auth toggle.
+   * Control UI still requires secure context + device identity unless
+   * dangerouslyDisableDeviceAuth is enabled.
+   */
   allowInsecureAuth?: boolean;
   /** DANGEROUS: Disable device identity checks for the Control UI (default: false). */
   dangerouslyDisableDeviceAuth?: boolean;
 };
 
-export type GatewayAuthMode = "token" | "password" | "trusted-proxy";
+export type GatewayAuthMode = "none" | "token" | "password" | "trusted-proxy";
 
 /**
  * Configuration for trusted reverse proxy authentication.
@@ -104,7 +108,7 @@ export type GatewayTrustedProxyConfig = {
 };
 
 export type GatewayAuthConfig = {
-  /** Authentication mode for Gateway connections. Defaults to token when set. */
+  /** Authentication mode for Gateway connections. Defaults to token when unset. */
   mode?: GatewayAuthMode;
   /** Shared token for token mode (stored locally for CLI auth). */
   token?: string;

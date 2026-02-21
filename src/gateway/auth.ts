@@ -20,9 +20,16 @@ import {
 } from "./net.js";
 
 export type ResolvedGatewayAuthMode = "none" | "token" | "password" | "trusted-proxy";
+export type ResolvedGatewayAuthModeSource =
+  | "override"
+  | "config"
+  | "password"
+  | "token"
+  | "default";
 
 export type ResolvedGatewayAuth = {
   mode: ResolvedGatewayAuthMode;
+  modeSource?: ResolvedGatewayAuthModeSource;
   token?: string;
   password?: string;
   allowTailscale: boolean;
@@ -178,24 +185,55 @@ async function resolveVerifiedTailscaleUser(params: {
 
 export function resolveGatewayAuth(params: {
   authConfig?: GatewayAuthConfig | null;
+  authOverride?: GatewayAuthConfig | null;
   env?: NodeJS.ProcessEnv;
   tailscaleMode?: GatewayTailscaleMode;
 }): ResolvedGatewayAuth {
-  const authConfig = params.authConfig ?? {};
+  const baseAuthConfig = params.authConfig ?? {};
+  const authOverride = params.authOverride ?? undefined;
+  const authConfig: GatewayAuthConfig = { ...baseAuthConfig };
+  if (authOverride) {
+    if (authOverride.mode !== undefined) {
+      authConfig.mode = authOverride.mode;
+    }
+    if (authOverride.token !== undefined) {
+      authConfig.token = authOverride.token;
+    }
+    if (authOverride.password !== undefined) {
+      authConfig.password = authOverride.password;
+    }
+    if (authOverride.allowTailscale !== undefined) {
+      authConfig.allowTailscale = authOverride.allowTailscale;
+    }
+    if (authOverride.rateLimit !== undefined) {
+      authConfig.rateLimit = authOverride.rateLimit;
+    }
+    if (authOverride.trustedProxy !== undefined) {
+      authConfig.trustedProxy = authOverride.trustedProxy;
+    }
+  }
   const env = params.env ?? process.env;
   const token = authConfig.token ?? env.OPENCLAW_GATEWAY_TOKEN ?? undefined;
   const password = authConfig.password ?? env.OPENCLAW_GATEWAY_PASSWORD ?? undefined;
   const trustedProxy = authConfig.trustedProxy;
 
   let mode: ResolvedGatewayAuth["mode"];
-  if (authConfig.mode) {
+  let modeSource: ResolvedGatewayAuth["modeSource"];
+  if (authOverride?.mode !== undefined) {
+    mode = authOverride.mode;
+    modeSource = "override";
+  } else if (authConfig.mode) {
     mode = authConfig.mode;
+    modeSource = "config";
   } else if (password) {
     mode = "password";
+    modeSource = "password";
   } else if (token) {
     mode = "token";
+    modeSource = "token";
   } else {
-    mode = "none";
+    mode = "token";
+    modeSource = "default";
   }
 
   const allowTailscale =
@@ -204,6 +242,7 @@ export function resolveGatewayAuth(params: {
 
   return {
     mode,
+    modeSource,
     token,
     password,
     allowTailscale,
@@ -286,6 +325,11 @@ export async function authorizeGatewayConnect(params: {
   req?: IncomingMessage;
   trustedProxies?: string[];
   tailscaleWhois?: TailscaleWhoisLookup;
+  /**
+   * Opt-in for accepting Tailscale Serve identity headers as primary auth.
+   * Default is disabled for HTTP surfaces; WS connect enables this explicitly.
+   */
+  allowTailscaleHeaderAuth?: boolean;
   /** Optional rate limiter instance; when provided, failed attempts are tracked per IP. */
   rateLimiter?: AuthRateLimiter;
   /** Client IP used for rate-limit tracking. Falls back to proxy-aware request IP resolution. */
@@ -295,6 +339,7 @@ export async function authorizeGatewayConnect(params: {
 }): Promise<GatewayAuthResult> {
   const { auth, connectAuth, req, trustedProxies } = params;
   const tailscaleWhois = params.tailscaleWhois ?? readTailscaleWhoisIdentity;
+  const allowTailscaleHeaderAuth = params.allowTailscaleHeaderAuth === true;
   const localDirect = isLocalDirectRequest(req, trustedProxies);
 
   if (auth.mode === "trusted-proxy") {
@@ -317,6 +362,10 @@ export async function authorizeGatewayConnect(params: {
     return { ok: false, reason: result.reason };
   }
 
+  if (auth.mode === "none") {
+    return { ok: true, method: "none" };
+  }
+
   const limiter = params.rateLimiter;
   const ip =
     params.clientIp ?? resolveRequestClientIp(req, trustedProxies) ?? req?.socket?.remoteAddress;
@@ -333,7 +382,7 @@ export async function authorizeGatewayConnect(params: {
     }
   }
 
-  if (auth.allowTailscale && !localDirect) {
+  if (allowTailscaleHeaderAuth && auth.allowTailscale && !localDirect) {
     const tailscaleCheck = await resolveVerifiedTailscaleUser({
       req,
       tailscaleWhois,
