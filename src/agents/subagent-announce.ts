@@ -535,7 +535,7 @@ async function sendSubagentAnnounceDirectly(params: {
         threadId: params.requesterIsSubagent ? undefined : threadId,
         idempotencyKey: params.directIdempotencyKey,
       },
-      expectFinal: true,
+      expectFinal: params.announceMode !== "workflow",
       timeoutMs: 15_000,
     });
 
