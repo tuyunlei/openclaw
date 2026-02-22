@@ -69,9 +69,14 @@ export function resolvePayloadLogSessionConfig(params: {
   return { enabled, dir };
 }
 
-export function resolvePayloadLogFilePath(baseDir: string, sessionId: string): string {
-  const safeId = SAFE_SESSION_ID_RE.test(sessionId) ? sessionId : "unknown";
-  return path.join(baseDir, `${safeId}.jsonl`);
+export function resolvePayloadLogFilePath(
+  baseDir: string,
+  sessionId: string,
+  runId: string,
+): string {
+  const safeSession = SAFE_SESSION_ID_RE.test(sessionId) ? sessionId : "unknown";
+  const safeRun = SAFE_SESSION_ID_RE.test(runId) ? runId : `unknown-${Date.now()}`;
+  return path.join(baseDir, safeSession, `${safeRun}.jsonl`);
 }
 
 function getWriter(filePath: string): PayloadLogWriter {
@@ -120,6 +125,7 @@ export type AnthropicPayloadLogger = {
   enabled: true;
   wrapStreamFn: (streamFn: StreamFn) => StreamFn;
   recordUsage: (messages: AgentMessage[], error?: unknown) => void;
+  dispose: () => void;
 };
 
 export function createAnthropicPayloadLogger(params: {
@@ -157,7 +163,8 @@ export function createAnthropicPayloadLogger(params: {
       activeWriters.push(getWriter(legacyCfg.filePath));
     }
     if (sessionCfg.enabled && params.sessionId) {
-      const filePath = resolvePayloadLogFilePath(sessionCfg.dir, params.sessionId);
+      const runId = params.runId ?? `unknown-${Date.now()}`;
+      const filePath = resolvePayloadLogFilePath(sessionCfg.dir, params.sessionId, runId);
       activeWriters.push(getWriter(filePath));
     }
   }
@@ -238,8 +245,14 @@ export function createAnthropicPayloadLogger(params: {
     });
   };
 
+  const dispose = () => {
+    for (const w of activeWriters) {
+      writers.delete(w.filePath);
+    }
+  };
+
   for (const w of activeWriters) {
     log.info("anthropic payload logger enabled", { filePath: w.filePath });
   }
-  return { enabled: true, wrapStreamFn, recordUsage };
+  return { enabled: true, wrapStreamFn, recordUsage, dispose };
 }

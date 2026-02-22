@@ -81,19 +81,24 @@ describe("resolvePayloadLogSessionConfig", () => {
 });
 
 describe("resolvePayloadLogFilePath", () => {
-  it("produces correct path for valid sessionId", () => {
-    const result = resolvePayloadLogFilePath("/base", "abc-123");
-    expect(result).toBe(path.join("/base", "abc-123.jsonl"));
+  it("produces correct two-level path for valid sessionId and runId", () => {
+    const result = resolvePayloadLogFilePath("/base", "abc-123", "run-456");
+    expect(result).toBe(path.join("/base", "abc-123", "run-456.jsonl"));
   });
 
   it("falls back to 'unknown' for invalid sessionId", () => {
-    const result = resolvePayloadLogFilePath("/base", "../evil");
-    expect(result).toBe(path.join("/base", "unknown.jsonl"));
+    const result = resolvePayloadLogFilePath("/base", "../evil", "run-1");
+    expect(result).toBe(path.join("/base", "unknown", "run-1.jsonl"));
   });
 
   it("falls back to 'unknown' for empty sessionId", () => {
-    const result = resolvePayloadLogFilePath("/base", "");
-    expect(result).toBe(path.join("/base", "unknown.jsonl"));
+    const result = resolvePayloadLogFilePath("/base", "", "run-1");
+    expect(result).toBe(path.join("/base", "unknown", "run-1.jsonl"));
+  });
+
+  it("falls back to 'unknown-*' for invalid runId", () => {
+    const result = resolvePayloadLogFilePath("/base", "abc-123", "../evil");
+    expect(result).toMatch(/\/base\/abc-123\/unknown-\d+\.jsonl$/);
   });
 });
 
@@ -187,5 +192,16 @@ describe("createAnthropicPayloadLogger", () => {
     });
     logger!.recordUsage([]);
     expect(writer.lines.length).toBe(0);
+  });
+
+  it("dispose is callable on injected-writer logger", () => {
+    const writer = makeMockWriter();
+    const logger = createAnthropicPayloadLogger({
+      env: {},
+      writers: [writer],
+    });
+    expect(logger).not.toBeNull();
+    // dispose should not throw even for injected writers
+    expect(() => logger!.dispose()).not.toThrow();
   });
 });
