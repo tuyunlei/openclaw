@@ -170,6 +170,8 @@ export type AgentDefaultsConfig = {
   verboseDefault?: "off" | "on" | "full";
   /** Default elevated level when no /elevated directive is present. */
   elevatedDefault?: "off" | "on" | "ask" | "full";
+  /** Default reasoning visibility level when no /reasoning directive is present. */
+  reasoningDefault?: "off" | "on" | "stream";
   /** Default block streaming level when no override is present. */
   /** Default response usage display level for all sessions. */
   responseUsage?: "off" | "on" | "tokens" | "full";

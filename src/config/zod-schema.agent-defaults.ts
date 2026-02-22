@@ -121,6 +121,7 @@ export const AgentDefaultsSchema = z
     elevatedDefault: z
       .union([z.literal("off"), z.literal("on"), z.literal("ask"), z.literal("full")])
       .optional(),
+    reasoningDefault: z.union([z.literal("off"), z.literal("on"), z.literal("stream")]).optional(),
     responseUsage: z
       .union([z.literal("off"), z.literal("on"), z.literal("tokens"), z.literal("full")])
       .optional(),

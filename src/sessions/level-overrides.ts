@@ -28,5 +28,6 @@ export function applyVerboseOverride(entry: SessionEntry, level: VerboseLevel | 
     delete entry.verboseLevel;
     return;
   }
+  // Always store explicitly (including "off") so it overrides global defaults.
   entry.verboseLevel = level;
 }
