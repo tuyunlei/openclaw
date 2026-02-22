@@ -2,6 +2,7 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { estimateTokens, generateSummary } from "@mariozechner/pi-coding-agent";
 import { retryAsync } from "../infra/retry.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { DEFAULT_CONTEXT_TOKENS } from "./defaults.js";
 import { repairToolUseResultPairing, stripToolResultDetails } from "./session-transcript-repair.js";
 
@@ -13,6 +14,7 @@ const DEFAULT_PARTS = 2;
 const MERGE_SUMMARIES_INSTRUCTIONS =
   "Merge these partial summaries into a single cohesive summary. Preserve decisions," +
   " TODOs, open questions, and any constraints.";
+const compactionTimingLog = createSubsystemLogger("compaction/timing");
 
 export function estimateMessagesTokens(messages: AgentMessage[]): number {
   // SECURITY: toolResult.details can contain untrusted/verbose payloads; never include in LLM-facing compaction.
@@ -149,6 +151,7 @@ async function summarizeChunks(params: {
   maxChunkTokens: number;
   customInstructions?: string;
   previousSummary?: string;
+  stageLabel?: string;
 }): Promise<string> {
   if (params.messages.length === 0) {
     return params.previousSummary ?? DEFAULT_SUMMARY_FALLBACK;
@@ -159,27 +162,51 @@ async function summarizeChunks(params: {
   const chunks = chunkMessagesByMaxTokens(safeMessages, params.maxChunkTokens);
   let summary = params.previousSummary;
 
-  for (const chunk of chunks) {
-    summary = await retryAsync(
-      () =>
-        generateSummary(
-          chunk,
-          params.model,
-          params.reserveTokens,
-          params.apiKey,
-          params.signal,
-          params.customInstructions,
-          summary,
-        ),
-      {
-        attempts: 3,
-        minDelayMs: 500,
-        maxDelayMs: 5000,
-        jitter: 0.2,
-        label: "compaction/generateSummary",
-        shouldRetry: (err) => !(err instanceof Error && err.name === "AbortError"),
-      },
+  for (const [chunkIndex, chunk] of chunks.entries()) {
+    const stageLabel = params.stageLabel ?? "summarize_chunks";
+    const inputTokens = estimateMessagesTokens(chunk);
+    compactionTimingLog.info(
+      `llm_call_start stage=${stageLabel} chunkIndex=${chunkIndex} chunkCount=${chunks.length} inputTokens=${inputTokens}`,
     );
+    const startMs = Date.now();
+    try {
+      summary = await retryAsync(
+        () =>
+          generateSummary(
+            chunk,
+            params.model,
+            params.reserveTokens,
+            params.apiKey,
+            params.signal,
+            params.customInstructions,
+            summary,
+          ),
+        {
+          attempts: 3,
+          minDelayMs: 500,
+          maxDelayMs: 5000,
+          jitter: 0.2,
+          label: "compaction/generateSummary",
+          shouldRetry: (err) => !(err instanceof Error && err.name === "AbortError"),
+          onRetry: (info) => {
+            compactionTimingLog.info(
+              `llm_call_retry stage=${stageLabel} chunkIndex=${chunkIndex} chunkCount=${chunks.length} inputTokens=${inputTokens} attempt=${info.attempt} maxAttempts=${info.maxAttempts} delayMs=${info.delayMs}`,
+            );
+          },
+        },
+      );
+      const durationMs = Date.now() - startMs;
+      compactionTimingLog.info(
+        `llm_call_done stage=${stageLabel} chunkIndex=${chunkIndex} chunkCount=${chunks.length} inputTokens=${inputTokens} durationMs=${durationMs} ok=true`,
+      );
+    } catch (error) {
+      const durationMs = Date.now() - startMs;
+      const errorName = error instanceof Error ? error.name : "UnknownError";
+      compactionTimingLog.info(
+        `llm_call_done stage=${stageLabel} chunkIndex=${chunkIndex} chunkCount=${chunks.length} inputTokens=${inputTokens} durationMs=${durationMs} ok=false error=${errorName}`,
+      );
+      throw error;
+    }
   }
 
   return summary ?? DEFAULT_SUMMARY_FALLBACK;
@@ -199,6 +226,7 @@ export async function summarizeWithFallback(params: {
   contextWindow: number;
   customInstructions?: string;
   previousSummary?: string;
+  stageLabel?: string;
 }): Promise<string> {
   const { messages, contextWindow } = params;
 
@@ -238,6 +266,7 @@ export async function summarizeWithFallback(params: {
       const partialSummary = await summarizeChunks({
         ...params,
         messages: smallMessages,
+        stageLabel: params.stageLabel ? `${params.stageLabel}/partial` : "summarize_chunks/partial",
       });
       const notes = oversizedNotes.length > 0 ? `\n\n${oversizedNotes.join("\n")}` : "";
       return partialSummary + notes;
@@ -269,6 +298,7 @@ export async function summarizeInStages(params: {
   previousSummary?: string;
   parts?: number;
   minMessagesForSplit?: number;
+  stageLabel?: string;
 }): Promise<string> {
   const { messages } = params;
   if (messages.length === 0) {
@@ -278,9 +308,16 @@ export async function summarizeInStages(params: {
   const minMessagesForSplit = Math.max(2, params.minMessagesForSplit ?? 4);
   const parts = normalizeParts(params.parts ?? DEFAULT_PARTS, messages.length);
   const totalTokens = estimateMessagesTokens(messages);
+  const stageLabel = params.stageLabel ?? "summarize_in_stages";
+  compactionTimingLog.info(
+    `stage_entry stage=${stageLabel} messageCount=${messages.length} totalTokens=${totalTokens} parts=${parts}`,
+  );
 
   if (parts <= 1 || messages.length < minMessagesForSplit || totalTokens <= params.maxChunkTokens) {
-    return summarizeWithFallback(params);
+    return summarizeWithFallback({
+      ...params,
+      stageLabel: `${stageLabel}/single_pass`,
+    });
   }
 
   const splits = splitMessagesByTokenShare(messages, parts).filter((chunk) => chunk.length > 0);
@@ -289,13 +326,23 @@ export async function summarizeInStages(params: {
   }
 
   const partialSummaries: string[] = [];
-  for (const chunk of splits) {
+  for (const [chunkIndex, chunk] of splits.entries()) {
+    const chunkTokens = estimateMessagesTokens(chunk);
+    compactionTimingLog.info(
+      `stage_chunk_start stage=${stageLabel} chunkIndex=${chunkIndex} chunkCount=${splits.length} messageCount=${chunk.length} inputTokens=${chunkTokens}`,
+    );
+    const chunkStartMs = Date.now();
     partialSummaries.push(
       await summarizeWithFallback({
         ...params,
         messages: chunk,
         previousSummary: undefined,
+        stageLabel: `${stageLabel}/chunk_${chunkIndex}`,
       }),
+    );
+    const chunkDurationMs = Date.now() - chunkStartMs;
+    compactionTimingLog.info(
+      `stage_chunk_done stage=${stageLabel} chunkIndex=${chunkIndex} chunkCount=${splits.length} messageCount=${chunk.length} inputTokens=${chunkTokens} durationMs=${chunkDurationMs} ok=true`,
     );
   }
 
@@ -313,11 +360,21 @@ export async function summarizeInStages(params: {
     ? `${MERGE_SUMMARIES_INSTRUCTIONS}\n\nAdditional focus:\n${params.customInstructions}`
     : MERGE_SUMMARIES_INSTRUCTIONS;
 
-  return summarizeWithFallback({
+  const mergeStartMs = Date.now();
+  compactionTimingLog.info(
+    `stage_merge_start stage=${stageLabel} partialCount=${partialSummaries.length} messageCount=${summaryMessages.length}`,
+  );
+  const mergedSummary = await summarizeWithFallback({
     ...params,
     messages: summaryMessages,
     customInstructions: mergeInstructions,
+    stageLabel: `${stageLabel}/merge`,
   });
+  const mergeDurationMs = Date.now() - mergeStartMs;
+  compactionTimingLog.info(
+    `stage_merge_done stage=${stageLabel} partialCount=${partialSummaries.length} messageCount=${summaryMessages.length} durationMs=${mergeDurationMs} ok=true`,
+  );
+  return mergedSummary;
 }
 
 export function pruneHistoryForContextShare(params: {

@@ -3,6 +3,7 @@ import path from "node:path";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, FileOperations } from "@mariozechner/pi-coding-agent";
 import { extractSections } from "../../auto-reply/reply/post-compaction-context.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import {
   BASE_CHUNK_RATIO,
   MIN_CHUNK_RATIO,
@@ -23,6 +24,7 @@ const TURN_PREFIX_INSTRUCTIONS =
   " early progress, and any details needed to understand the retained suffix.";
 const MAX_TOOL_FAILURES = 8;
 const MAX_TOOL_FAILURE_CHARS = 240;
+const compactionTimingLog = createSubsystemLogger("compaction/timing");
 
 type ToolFailure = {
   toolCallId: string;
@@ -270,17 +272,42 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
                   1,
                   Math.floor(contextWindowTokens * droppedChunkRatio),
                 );
-                droppedSummary = await summarizeInStages({
-                  messages: pruned.droppedMessagesList,
-                  model,
-                  apiKey,
-                  signal,
-                  reserveTokens: Math.max(1, Math.floor(preparation.settings.reserveTokens)),
-                  maxChunkTokens: droppedMaxChunkTokens,
-                  contextWindow: contextWindowTokens,
-                  customInstructions,
-                  previousSummary: preparation.previousSummary,
-                });
+                const droppedLabel = "safeguard/dropped";
+                const droppedCount = pruned.droppedMessagesList.length;
+                const droppedStartMs = Date.now();
+                compactionTimingLog.info(
+                  `safeguard_call_start stage=${droppedLabel} messageCount=${droppedCount} startMs=${droppedStartMs}`,
+                );
+                try {
+                  droppedSummary = await summarizeInStages({
+                    messages: pruned.droppedMessagesList,
+                    model,
+                    apiKey,
+                    signal,
+                    reserveTokens: Math.max(1, Math.floor(preparation.settings.reserveTokens)),
+                    maxChunkTokens: droppedMaxChunkTokens,
+                    contextWindow: contextWindowTokens,
+                    customInstructions,
+                    previousSummary: preparation.previousSummary,
+                    stageLabel: droppedLabel,
+                  });
+                  const droppedEndMs = Date.now();
+                  const droppedDurationMs = droppedEndMs - droppedStartMs;
+                  compactionTimingLog.info(
+                    `safeguard_call_done stage=${droppedLabel} messageCount=${droppedCount} startMs=${droppedStartMs} endMs=${droppedEndMs} durationMs=${droppedDurationMs} ok=true`,
+                  );
+                } catch (droppedSummaryError) {
+                  const droppedEndMs = Date.now();
+                  const droppedDurationMs = droppedEndMs - droppedStartMs;
+                  const errorName =
+                    droppedSummaryError instanceof Error
+                      ? droppedSummaryError.name
+                      : "UnknownError";
+                  compactionTimingLog.info(
+                    `safeguard_call_done stage=${droppedLabel} messageCount=${droppedCount} startMs=${droppedStartMs} endMs=${droppedEndMs} durationMs=${droppedDurationMs} ok=false error=${errorName}`,
+                  );
+                  throw droppedSummaryError;
+                }
               } catch (droppedError) {
                 console.warn(
                   `Compaction safeguard: failed to summarize dropped messages, continuing without: ${
@@ -303,31 +330,77 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
       // incorporates context from pruned messages instead of losing it entirely.
       const effectivePreviousSummary = droppedSummary ?? preparation.previousSummary;
 
-      const historySummary = await summarizeInStages({
-        messages: messagesToSummarize,
-        model,
-        apiKey,
-        signal,
-        reserveTokens,
-        maxChunkTokens,
-        contextWindow: contextWindowTokens,
-        customInstructions,
-        previousSummary: effectivePreviousSummary,
-      });
-
-      let summary = historySummary;
-      if (preparation.isSplitTurn && turnPrefixMessages.length > 0) {
-        const prefixSummary = await summarizeInStages({
-          messages: turnPrefixMessages,
+      const historyLabel = "safeguard/history";
+      const historyCount = messagesToSummarize.length;
+      const historyStartMs = Date.now();
+      compactionTimingLog.info(
+        `safeguard_call_start stage=${historyLabel} messageCount=${historyCount} startMs=${historyStartMs}`,
+      );
+      let historySummary: string;
+      try {
+        historySummary = await summarizeInStages({
+          messages: messagesToSummarize,
           model,
           apiKey,
           signal,
           reserveTokens,
           maxChunkTokens,
           contextWindow: contextWindowTokens,
-          customInstructions: TURN_PREFIX_INSTRUCTIONS,
-          previousSummary: undefined,
+          customInstructions,
+          previousSummary: effectivePreviousSummary,
+          stageLabel: historyLabel,
         });
+        const historyEndMs = Date.now();
+        const historyDurationMs = historyEndMs - historyStartMs;
+        compactionTimingLog.info(
+          `safeguard_call_done stage=${historyLabel} messageCount=${historyCount} startMs=${historyStartMs} endMs=${historyEndMs} durationMs=${historyDurationMs} ok=true`,
+        );
+      } catch (historyError) {
+        const historyEndMs = Date.now();
+        const historyDurationMs = historyEndMs - historyStartMs;
+        const errorName = historyError instanceof Error ? historyError.name : "UnknownError";
+        compactionTimingLog.info(
+          `safeguard_call_done stage=${historyLabel} messageCount=${historyCount} startMs=${historyStartMs} endMs=${historyEndMs} durationMs=${historyDurationMs} ok=false error=${errorName}`,
+        );
+        throw historyError;
+      }
+
+      let summary = historySummary;
+      if (preparation.isSplitTurn && turnPrefixMessages.length > 0) {
+        const prefixLabel = "safeguard/prefix";
+        const prefixCount = turnPrefixMessages.length;
+        const prefixStartMs = Date.now();
+        compactionTimingLog.info(
+          `safeguard_call_start stage=${prefixLabel} messageCount=${prefixCount} startMs=${prefixStartMs}`,
+        );
+        let prefixSummary: string;
+        try {
+          prefixSummary = await summarizeInStages({
+            messages: turnPrefixMessages,
+            model,
+            apiKey,
+            signal,
+            reserveTokens,
+            maxChunkTokens,
+            contextWindow: contextWindowTokens,
+            customInstructions: TURN_PREFIX_INSTRUCTIONS,
+            previousSummary: undefined,
+            stageLabel: prefixLabel,
+          });
+          const prefixEndMs = Date.now();
+          const prefixDurationMs = prefixEndMs - prefixStartMs;
+          compactionTimingLog.info(
+            `safeguard_call_done stage=${prefixLabel} messageCount=${prefixCount} startMs=${prefixStartMs} endMs=${prefixEndMs} durationMs=${prefixDurationMs} ok=true`,
+          );
+        } catch (prefixError) {
+          const prefixEndMs = Date.now();
+          const prefixDurationMs = prefixEndMs - prefixStartMs;
+          const errorName = prefixError instanceof Error ? prefixError.name : "UnknownError";
+          compactionTimingLog.info(
+            `safeguard_call_done stage=${prefixLabel} messageCount=${prefixCount} startMs=${prefixStartMs} endMs=${prefixEndMs} durationMs=${prefixDurationMs} ok=false error=${errorName}`,
+          );
+          throw prefixError;
+        }
         summary = `${historySummary}\n\n---\n\n**Turn Context (split turn):**\n\n${prefixSummary}`;
       }
 
