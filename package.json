@@ -245,6 +245,9 @@
       "node-llama-cpp",
       "protobufjs",
       "sharp"
-    ]
+    ],
+    "patchedDependencies": {
+      "@mariozechner/pi-coding-agent": "patches/@mariozechner__pi-coding-agent.patch"
+    }
   }
 }

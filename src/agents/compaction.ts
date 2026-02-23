@@ -1,8 +1,11 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { estimateTokens, generateSummary } from "@mariozechner/pi-coding-agent";
 import { retryAsync } from "../infra/retry.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import { resolveUserPath } from "../utils.js";
 import { DEFAULT_CONTEXT_TOKENS } from "./defaults.js";
 import { repairToolUseResultPairing, stripToolResultDetails } from "./session-transcript-repair.js";
 
@@ -11,6 +14,31 @@ export const MIN_CHUNK_RATIO = 0.15;
 export const SAFETY_MARGIN = 1.2; // 20% buffer for estimateTokens() inaccuracy
 const DEFAULT_SUMMARY_FALLBACK = "No prior history.";
 const DEFAULT_PARTS = 2;
+async function dumpCompactionPayload(
+  stage: string,
+  chunkIndex: number,
+  payload: unknown,
+  summary?: string,
+): Promise<void> {
+  try {
+    const dumpDir = resolveUserPath(".openclaw/compaction-dumps");
+    await fs.mkdir(dumpDir, { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `${ts}_${stage.replace(/\//g, "_")}_chunk${chunkIndex}`;
+    await fs.writeFile(
+      path.join(dumpDir, `${filename}.request.json`),
+      JSON.stringify(payload, null, 2),
+    );
+    if (summary !== undefined) {
+      await fs.writeFile(path.join(dumpDir, `${filename}.response.txt`), summary);
+    }
+  } catch (err) {
+    compactionTimingLog.info(
+      `dump_error stage=${stage} chunkIndex=${chunkIndex} error=${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 const MERGE_SUMMARIES_INSTRUCTIONS =
   "Merge these partial summaries into a single cohesive summary. Preserve decisions," +
   " TODOs, open questions, and any constraints.";
@@ -170,6 +198,7 @@ async function summarizeChunks(params: {
     );
     const startMs = Date.now();
     try {
+      let capturedPayload: unknown;
       summary = await retryAsync(
         () =>
           generateSummary(
@@ -180,6 +209,11 @@ async function summarizeChunks(params: {
             params.signal,
             params.customInstructions,
             summary,
+            {
+              onPayload: (payload: unknown) => {
+                capturedPayload = payload;
+              },
+            },
           ),
         {
           attempts: 3,
@@ -199,6 +233,10 @@ async function summarizeChunks(params: {
       compactionTimingLog.info(
         `llm_call_done stage=${stageLabel} chunkIndex=${chunkIndex} chunkCount=${chunks.length} inputTokens=${inputTokens} durationMs=${durationMs} ok=true`,
       );
+      // Dump the full request payload and response for offline analysis
+      if (capturedPayload) {
+        void dumpCompactionPayload(stageLabel, chunkIndex, capturedPayload, summary ?? undefined);
+      }
     } catch (error) {
       const durationMs = Date.now() - startMs;
       const errorName = error instanceof Error ? error.name : "UnknownError";
