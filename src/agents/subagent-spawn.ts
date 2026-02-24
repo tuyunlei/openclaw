@@ -33,6 +33,7 @@ export type SpawnSubagentParams = {
   mode?: SpawnSubagentMode;
   cleanup?: "delete" | "keep";
   expectsCompletionMessage?: boolean;
+  announceMode?: "notify" | "workflow";
 };
 
 export type SpawnSubagentContext = {
@@ -485,6 +486,7 @@ export async function spawnSubagentDirect(
     runTimeoutSeconds,
     expectsCompletionMessage,
     spawnMode,
+    announceMode: params.announceMode,
   });
 
   if (hookRunner?.hasHooks("subagent_spawned")) {

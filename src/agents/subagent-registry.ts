@@ -211,6 +211,7 @@ function startSubagentAnnounceCleanupFlow(runId: string, entry: SubagentRunRecor
     outcome: entry.outcome,
     spawnMode: entry.spawnMode,
     expectsCompletionMessage: entry.expectsCompletionMessage,
+    announceMode: entry.announceMode,
   }).then((didAnnounce) => {
     void finalizeSubagentCleanup(runId, entry.cleanup, didAnnounce);
   });
@@ -681,6 +682,7 @@ export function registerSubagentRun(params: {
   runTimeoutSeconds?: number;
   expectsCompletionMessage?: boolean;
   spawnMode?: "run" | "session";
+  announceMode?: "notify" | "workflow";
 }) {
   const now = Date.now();
   const cfg = loadConfig();
@@ -701,6 +703,7 @@ export function registerSubagentRun(params: {
     cleanup: params.cleanup,
     expectsCompletionMessage: params.expectsCompletionMessage,
     spawnMode,
+    announceMode: params.announceMode,
     label: params.label,
     model: params.model,
     runTimeoutSeconds,

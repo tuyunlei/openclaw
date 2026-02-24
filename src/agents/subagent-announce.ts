@@ -638,6 +638,7 @@ async function sendSubagentAnnounceDirectly(params: {
   bestEffortDeliver?: boolean;
   completionRouteMode?: "bound" | "fallback" | "hook";
   spawnMode?: SpawnSubagentMode;
+  announceMode?: "notify" | "workflow";
   directIdempotencyKey: string;
   completionDirectOrigin?: DeliveryContext;
   directOrigin?: DeliveryContext;
@@ -671,7 +672,13 @@ async function sendSubagentAnnounceDirectly(params: {
     const hasCompletionDirectTarget =
       !params.requesterIsSubagent && Boolean(completionChannel) && Boolean(completionTo);
 
+    // Workflow mode: always inject result into requester session via method:"agent"
+    // so the requester agent can process it as part of orchestration, never send
+    // completion directly to the user.
+    const isWorkflowMode = params.announceMode === "workflow";
+
     if (
+      !isWorkflowMode &&
       params.expectsCompletionMessage &&
       hasCompletionDirectTarget &&
       params.completionMessage?.trim()
@@ -746,15 +753,17 @@ async function sendSubagentAnnounceDirectly(params: {
       params: {
         sessionKey: canonicalRequesterSessionKey,
         message: params.triggerMessage,
-        deliver: !params.requesterIsSubagent,
+        deliver: isWorkflowMode ? false : !params.requesterIsSubagent,
         bestEffortDeliver: params.bestEffortDeliver,
-        channel: params.requesterIsSubagent ? undefined : directOrigin?.channel,
-        accountId: params.requesterIsSubagent ? undefined : directOrigin?.accountId,
-        to: params.requesterIsSubagent ? undefined : directOrigin?.to,
-        threadId: params.requesterIsSubagent ? undefined : threadId,
+        channel: params.requesterIsSubagent || isWorkflowMode ? undefined : directOrigin?.channel,
+        accountId:
+          params.requesterIsSubagent || isWorkflowMode ? undefined : directOrigin?.accountId,
+        to: params.requesterIsSubagent || isWorkflowMode ? undefined : directOrigin?.to,
+        threadId: params.requesterIsSubagent || isWorkflowMode ? undefined : threadId,
         idempotencyKey: params.directIdempotencyKey,
       },
-      expectFinal: true,
+      // Workflow mode: let requester agent continue orchestrating (no forced final reply).
+      expectFinal: !isWorkflowMode,
       timeoutMs: announceTimeoutMs,
     });
 
@@ -786,6 +795,7 @@ async function deliverSubagentAnnouncement(params: {
   bestEffortDeliver?: boolean;
   completionRouteMode?: "bound" | "fallback" | "hook";
   spawnMode?: SpawnSubagentMode;
+  announceMode?: "notify" | "workflow";
   directIdempotencyKey: string;
   signal?: AbortSignal;
 }): Promise<SubagentAnnounceDeliveryResult> {
@@ -822,6 +832,7 @@ async function deliverSubagentAnnouncement(params: {
     completionDirectOrigin: params.completionDirectOrigin,
     completionRouteMode: params.completionRouteMode,
     spawnMode: params.spawnMode,
+    announceMode: params.announceMode,
     directOrigin: params.directOrigin,
     requesterIsSubagent: params.requesterIsSubagent,
     expectsCompletionMessage: params.expectsCompletionMessage,
@@ -961,7 +972,14 @@ function buildAnnounceReplyInstruction(params: {
   requesterIsSubagent: boolean;
   announceType: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
+  announceMode?: "notify" | "workflow";
 }): string {
+  // Workflow mode: result is internal orchestration context for the requester
+  // agent. Process it according to your workflow instructions instead of
+  // sending a user-facing update.
+  if (params.announceMode === "workflow") {
+    return "This subagent result is a workflow step completion. Process this result according to your workflow instructions. Do NOT send a user-facing message about this result — instead, continue your orchestration (e.g. spawn the next step, aggregate results, or finalize the workflow). Only send a user-facing message when the entire workflow is complete.";
+  }
   if (params.remainingActiveSubagentRuns > 0) {
     const activeRunsLabel = params.remainingActiveSubagentRuns === 1 ? "run" : "runs";
     return `There are still ${params.remainingActiveSubagentRuns} active subagent ${activeRunsLabel} for this session. If they are part of the same workflow, wait for the remaining results before sending a user update. If they are unrelated, respond normally using only the result above.`;
@@ -993,6 +1011,7 @@ export async function runSubagentAnnounceFlow(params: {
   announceType?: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
   spawnMode?: SpawnSubagentMode;
+  announceMode?: "notify" | "workflow";
   signal?: AbortSignal;
   bestEffortDeliver?: boolean;
 }): Promise<boolean> {
@@ -1185,6 +1204,7 @@ export async function runSubagentAnnounceFlow(params: {
       requesterIsSubagent,
       announceType,
       expectsCompletionMessage,
+      announceMode: params.announceMode,
     });
     const statsLine = await buildCompactAnnounceStatsLine({
       sessionKey: params.childSessionKey,
@@ -1255,6 +1275,7 @@ export async function runSubagentAnnounceFlow(params: {
       bestEffortDeliver: params.bestEffortDeliver,
       completionRouteMode: completionResolution.routeMode,
       spawnMode: params.spawnMode,
+      announceMode: params.announceMode,
       directIdempotencyKey,
       signal: params.signal,
     });

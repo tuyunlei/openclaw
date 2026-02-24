@@ -5,6 +5,8 @@ import { SUBAGENT_SPAWN_MODES, spawnSubagentDirect } from "../subagent-spawn.js"
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam } from "./common.js";
 
+const ANNOUNCE_MODES = ["notify", "workflow"] as const;
+
 const SessionsSpawnToolSchema = Type.Object({
   task: Type.String(),
   label: Type.Optional(Type.String()),
@@ -17,6 +19,7 @@ const SessionsSpawnToolSchema = Type.Object({
   thread: Type.Optional(Type.Boolean()),
   mode: optionalStringEnum(SUBAGENT_SPAWN_MODES),
   cleanup: optionalStringEnum(["delete", "keep"] as const),
+  announceMode: optionalStringEnum(ANNOUNCE_MODES),
 });
 
 export function createSessionsSpawnTool(opts?: {
@@ -60,6 +63,10 @@ export function createSessionsSpawnTool(opts?: {
           ? Math.max(0, Math.floor(timeoutSecondsCandidate))
           : undefined;
       const thread = params.thread === true;
+      const announceMode =
+        params.announceMode === "notify" || params.announceMode === "workflow"
+          ? params.announceMode
+          : undefined;
 
       const result = await spawnSubagentDirect(
         {
@@ -73,6 +80,7 @@ export function createSessionsSpawnTool(opts?: {
           mode,
           cleanup,
           expectsCompletionMessage: true,
+          announceMode,
         },
         {
           agentSessionKey: opts?.agentSessionKey,

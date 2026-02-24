@@ -15,6 +15,7 @@ export type SubagentRunRecord = {
   model?: string;
   runTimeoutSeconds?: number;
   spawnMode?: SpawnSubagentMode;
+  announceMode?: "notify" | "workflow";
   createdAt: number;
   startedAt?: number;
   endedAt?: number;

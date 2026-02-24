@@ -262,7 +262,7 @@ export function buildAgentSystemPrompt(params: {
     sessions_history: "Fetch history for another session/sub-agent",
     sessions_send: "Send a message to another session/sub-agent",
     sessions_spawn:
-      'Spawn a sub-agent session. announceMode "notify" (default) sends result to user; "workflow" injects result as internal context only, letting the requester agent control the next step',
+      'Spawn a sub-agent session. mode="run" (default) for one-shot tasks, mode="session" for persistent thread-bound sessions. announceMode="notify" (default) sends result to user; announceMode="workflow" injects result as internal context only, letting the requester agent control the next step',
     subagents: "List, steer, or kill sub-agent runs for this requester session",
     session_status:
       "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
@@ -444,7 +444,7 @@ export function buildAgentSystemPrompt(params: {
         ].join("\n"),
     "TOOLS.md does not control tool availability; it is user guidance for how to use external tools.",
     `For long waits, avoid rapid poll loops: use ${execToolName} with enough yieldMs or ${processToolName}(action=poll, timeout=<ms>).`,
-    'If a task is more complex or takes longer, spawn a sub-agent. Completion is push-based: it will auto-announce when done. Use announceMode "workflow" for multi-step orchestration where you need to process the result before responding to the user.',
+    'If a task is more complex or takes longer, spawn a sub-agent. Completion is push-based: it will auto-announce when done. Use announceMode="workflow" for multi-step orchestration where you need to process the result before responding to the user.',
     "Do not poll `subagents list` / `sessions_list` in a loop; only check status on-demand (for intervention, debugging, or when explicitly asked).",
     "",
     "## Tool Call Style",
