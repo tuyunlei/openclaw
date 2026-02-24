@@ -466,7 +466,9 @@ export function buildWorkspaceSkillSnapshot(
   const promptEntries = eligible.filter(
     (entry) => entry.invocation?.disableModelInvocation !== true,
   );
-  const resolvedSkills = promptEntries.map((entry) => entry.skill);
+  const resolvedSkills = promptEntries
+    .map((entry) => entry.skill)
+    .sort((a, b) => a.name.localeCompare(b.name));
   const remoteNote = opts?.eligibility?.remote?.note?.trim();
   const { skillsForPrompt, truncated } = applySkillsPromptLimits({
     skills: resolvedSkills,
@@ -521,7 +523,9 @@ export function buildWorkspaceSkillsPrompt(
     (entry) => entry.invocation?.disableModelInvocation !== true,
   );
   const remoteNote = opts?.eligibility?.remote?.note?.trim();
-  const resolvedSkills = promptEntries.map((entry) => entry.skill);
+  const resolvedSkills = promptEntries
+    .map((entry) => entry.skill)
+    .sort((a, b) => a.name.localeCompare(b.name));
   const { skillsForPrompt, truncated } = applySkillsPromptLimits({
     skills: resolvedSkills,
     config: opts?.config,

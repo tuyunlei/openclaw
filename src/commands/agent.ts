@@ -27,6 +27,7 @@ import { buildWorkspaceSkillSnapshot } from "../agents/skills.js";
 import { getSkillsSnapshotVersion } from "../agents/skills/refresh.js";
 import { resolveAgentTimeoutMs } from "../agents/timeout.js";
 import { ensureAgentWorkspace } from "../agents/workspace.js";
+import { resolveOwnerNumbersForChannel } from "../auto-reply/command-auth.js";
 import {
   formatThinkingLevels,
   formatXHighModelHint,
@@ -108,6 +109,7 @@ function runAgentAttempt(params: {
   agentDir: string;
   onAgentEvent: (evt: { stream: string; data?: Record<string, unknown> }) => void;
   primaryProvider: string;
+  ownerNumbers?: string[];
 }) {
   const effectivePrompt = resolveFallbackRetryPrompt({
     body: params.body,
@@ -178,6 +180,7 @@ function runAgentAttempt(params: {
     streamParams: params.opts.streamParams,
     agentDir: params.agentDir,
     onAgentEvent: params.onAgentEvent,
+    ownerNumbers: params.ownerNumbers,
   });
 }
 
@@ -523,6 +526,11 @@ export async function agentCommand(
         opts.replyChannel ?? opts.channel,
       );
       const spawnedBy = opts.spawnedBy ?? sessionEntry?.spawnedBy;
+      const ownerNumbers = resolveOwnerNumbersForChannel({
+        cfg,
+        messageChannel,
+        accountId: runContext.accountId,
+      });
       // Keep fallback candidate resolution centralized so session model overrides,
       // per-agent overrides, and default fallbacks stay consistent across callers.
       const effectiveFallbacksOverride = resolveEffectiveModelFallbacks({
@@ -566,6 +574,7 @@ export async function agentCommand(
             resolvedVerboseLevel,
             agentDir,
             primaryProvider: provider,
+            ownerNumbers,
             onAgentEvent: (evt) => {
               // Track lifecycle end for fallback emission below.
               if (

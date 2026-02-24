@@ -89,12 +89,9 @@ export async function runMemoryFlushIfNeeded(params: {
     });
   }
   let memoryCompactionCompleted = false;
-  const flushSystemPrompt = [
-    params.followupRun.run.extraSystemPrompt,
-    memoryFlushSettings.systemPrompt,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  // Keep extraSystemPrompt unchanged for the flush turn to avoid cache invalidation.
+  // The flush instructions are already carried in the user-message `prompt` parameter.
+  const flushSystemPrompt = params.followupRun.run.extraSystemPrompt ?? "";
   try {
     await runWithModelFallback({
       ...resolveModelFallbackOptions(params.followupRun.run),

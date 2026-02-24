@@ -27,6 +27,7 @@ import { countActiveDescendantRuns } from "../../agents/subagent-registry.js";
 import { resolveAgentTimeoutMs } from "../../agents/timeout.js";
 import { deriveSessionTotalTokens, hasNonzeroUsage } from "../../agents/usage.js";
 import { ensureAgentWorkspace } from "../../agents/workspace.js";
+import { resolveOwnerNumbersForChannel } from "../../auto-reply/command-auth.js";
 import {
   normalizeThinkLevel,
   normalizeVerboseLevel,
@@ -492,6 +493,11 @@ export async function runCronIsolatedAgentTurn(params: {
           runId: cronSession.sessionEntry.sessionId,
           requireExplicitMessageTarget: true,
           disableMessageTool: deliveryRequested,
+          ownerNumbers: resolveOwnerNumbersForChannel({
+            cfg: cfgWithAgentDefaults,
+            messageChannel,
+            accountId: resolvedDelivery.accountId,
+          }),
         });
       },
     });

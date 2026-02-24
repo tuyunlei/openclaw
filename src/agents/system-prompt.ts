@@ -573,37 +573,47 @@ export function buildAgentSystemPrompt(params: {
     ...buildVoiceSection({ isMinimal, ttsHint: params.ttsHint }),
   ];
 
-  if (extraSystemPrompt) {
-    // Use "Subagent Context" header for minimal mode (subagents), otherwise "Group Chat Context"
+  // --- Conditional sections: always emit headers to keep prompt structure stable for caching ---
+  {
     const contextHeader =
       promptMode === "minimal" ? "## Subagent Context" : "## Group Chat Context";
-    lines.push(contextHeader, extraSystemPrompt, "");
+    lines.push(contextHeader, extraSystemPrompt || "No additional context for this turn.", "");
   }
-  if (params.reactionGuidance) {
-    const { level, channel } = params.reactionGuidance;
-    const guidanceText =
-      level === "minimal"
-        ? [
-            `Reactions are enabled for ${channel} in MINIMAL mode.`,
-            "React ONLY when truly relevant:",
-            "- Acknowledge important user requests or confirmations",
-            "- Express genuine sentiment (humor, appreciation) sparingly",
-            "- Avoid reacting to routine messages or your own replies",
-            "Guideline: at most 1 reaction per 5-10 exchanges.",
-          ].join("\n")
-        : [
-            `Reactions are enabled for ${channel} in EXTENSIVE mode.`,
-            "Feel free to react liberally:",
-            "- Acknowledge messages with appropriate emojis",
-            "- Express sentiment and personality through reactions",
-            "- React to interesting content, humor, or notable events",
-            "- Use reactions to confirm understanding or agreement",
-            "Guideline: react whenever it feels natural.",
-          ].join("\n");
-    lines.push("## Reactions", guidanceText, "");
+  {
+    lines.push("## Reactions");
+    if (params.reactionGuidance) {
+      const { level, channel } = params.reactionGuidance;
+      const guidanceText =
+        level === "minimal"
+          ? [
+              `Reactions are enabled for ${channel} in MINIMAL mode.`,
+              "React ONLY when truly relevant:",
+              "- Acknowledge important user requests or confirmations",
+              "- Express genuine sentiment (humor, appreciation) sparingly",
+              "- Avoid reacting to routine messages or your own replies",
+              "Guideline: at most 1 reaction per 5-10 exchanges.",
+            ].join("\n")
+          : [
+              `Reactions are enabled for ${channel} in EXTENSIVE mode.`,
+              "Feel free to react liberally:",
+              "- Acknowledge messages with appropriate emojis",
+              "- Express sentiment and personality through reactions",
+              "- React to interesting content, humor, or notable events",
+              "- Use reactions to confirm understanding or agreement",
+              "Guideline: react whenever it feels natural.",
+            ].join("\n");
+      lines.push(guidanceText, "");
+    } else {
+      lines.push("Reactions are not enabled for this context.", "");
+    }
   }
-  if (reasoningHint) {
-    lines.push("## Reasoning Format", reasoningHint, "");
+  {
+    lines.push("## Reasoning Format");
+    if (reasoningHint) {
+      lines.push(reasoningHint, "");
+    } else {
+      lines.push("Default reasoning format.", "");
+    }
   }
 
   const contextFiles = params.contextFiles ?? [];
