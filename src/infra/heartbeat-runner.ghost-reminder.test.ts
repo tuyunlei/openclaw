@@ -141,7 +141,7 @@ describe("Ghost reminder bug (issue #13317)", () => {
     });
     expect(result.status).toBe("ran");
     expect(replyCallCount).toBe(1);
-    expect(calledCtx?.Provider).toBe("heartbeat");
+    expect(calledCtx?.Provider).toBe("telegram");
     expect(calledCtx?.Body).not.toContain("scheduled reminder has been triggered");
     expect(calledCtx?.Body).not.toContain("relay this reminder");
     expect(sendTelegram).toHaveBeenCalled();

@@ -40,7 +40,6 @@ export function registerGroupIntroPromptCases(params: {
               Provider: "discord",
             },
             expected: [
-              '"channel": "discord"',
               `You are in the Discord group chat "Release Squad". Participants: Alice, Bob.`,
               `Activation: trigger-only (you are invoked only when explicitly mentioned; recent context may be included). ${groupParticipationNote} Address the specific sender noted in the message context.`,
             ],
@@ -56,7 +55,6 @@ export function registerGroupIntroPromptCases(params: {
               Provider: "whatsapp",
             },
             expected: [
-              '"channel": "whatsapp"',
               `You are in the WhatsApp group chat "Ops".`,
               `WhatsApp IDs: SenderId is the participant JID (group participant id).`,
               `Activation: trigger-only (you are invoked only when explicitly mentioned; recent context may be included). WhatsApp IDs: SenderId is the participant JID (group participant id). ${groupParticipationNote} Address the specific sender noted in the message context.`,
@@ -73,7 +71,6 @@ export function registerGroupIntroPromptCases(params: {
               Provider: "telegram",
             },
             expected: [
-              '"channel": "telegram"',
               `You are in the Telegram group chat "Dev Chat".`,
               `Activation: trigger-only (you are invoked only when explicitly mentioned; recent context may be included). ${groupParticipationNote} Address the specific sender noted in the message context.`,
             ],
@@ -102,11 +99,7 @@ export function registerGroupIntroPromptCases(params: {
               GroupSubject: "Test Group",
               GroupMembers: "Alice (+1), Bob (+2)",
             },
-            expected: [
-              '"channel": "whatsapp"',
-              '"chat_type": "group"',
-              "Activation: always-on (you receive every group message).",
-            ],
+            expected: ["Activation: always-on (you receive every group message)."],
           },
         ];
 

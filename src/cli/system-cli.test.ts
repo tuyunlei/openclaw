@@ -62,7 +62,7 @@ describe("system-cli", () => {
     await runCli(["system", "event", "--text", "hello", "--mode", "later"]);
 
     expect(callGatewayFromCli).not.toHaveBeenCalled();
-    expect(runtimeErrors[0]).toContain("--mode must be now or next-heartbeat");
+    expect(runtimeErrors[0]).toContain("--mode must be now, next-heartbeat, or agent-turn");
   });
 
   it.each([
