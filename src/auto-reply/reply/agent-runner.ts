@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import { lookupContextTokens } from "../../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
@@ -8,6 +7,7 @@ import { hasNonzeroUsage, normalizeUsage } from "../../agents/usage.js";
 import {
   resolveAgentIdFromSessionKey,
   resolveSessionFilePath,
+  resolveSessionFilePathOptions,
   resolveSessionTranscriptPath,
   type SessionEntry,
   updateSessionStore,
@@ -16,6 +16,7 @@ import {
 import type { TypingMode } from "../../config/types.js";
 import { emitAgentEvent } from "../../infra/agent-events.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
+import { generateSecureUuid } from "../../infra/secure-random.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import { diagnosticLogger as diag } from "../../logging/diagnostic.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -293,7 +294,7 @@ export async function runReplyAgent(params: {
       return false;
     }
     const prevSessionId = cleanupTranscripts ? prevEntry.sessionId : undefined;
-    const nextSessionId = crypto.randomUUID();
+    const nextSessionId = generateSecureUuid();
     const nextEntry: SessionEntry = {
       ...prevEntry,
       sessionId: nextSessionId,
@@ -328,7 +329,11 @@ export async function runReplyAgent(params: {
     defaultRuntime.error(buildLogMessage(nextSessionId));
     if (cleanupTranscripts && prevSessionId) {
       const transcriptCandidates = new Set<string>();
-      const resolved = resolveSessionFilePath(prevSessionId, prevEntry, { agentId });
+      const resolved = resolveSessionFilePath(
+        prevSessionId,
+        prevEntry,
+        resolveSessionFilePathOptions({ agentId, storePath }),
+      );
       if (resolved) {
         transcriptCandidates.add(resolved);
       }

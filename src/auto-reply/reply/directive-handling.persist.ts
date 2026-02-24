@@ -90,8 +90,12 @@ export async function persistInlineDirectives(params: {
       updated = true;
     }
     if (directives.hasReasoningDirective && directives.reasoningLevel) {
-      // Always store explicitly (including "off") so it overrides global defaults.
-      sessionEntry.reasoningLevel = directives.reasoningLevel;
+      if (directives.reasoningLevel === "off") {
+        // Persist explicit off so it overrides model-capability defaults.
+        sessionEntry.reasoningLevel = "off";
+      } else {
+        sessionEntry.reasoningLevel = directives.reasoningLevel;
+      }
       reasoningChanged =
         reasoningChanged ||
         (directives.reasoningLevel !== prevReasoningLevel &&

@@ -291,8 +291,12 @@ export async function handleDirectiveOnly(
     applyVerboseOverride(sessionEntry, directives.verboseLevel);
   }
   if (directives.hasReasoningDirective && directives.reasoningLevel) {
-    // Always store explicitly (including "off") so it overrides global defaults.
-    sessionEntry.reasoningLevel = directives.reasoningLevel;
+    if (directives.reasoningLevel === "off") {
+      // Persist explicit off so it overrides model-capability defaults.
+      sessionEntry.reasoningLevel = "off";
+    } else {
+      sessionEntry.reasoningLevel = directives.reasoningLevel;
+    }
     reasoningChanged =
       directives.reasoningLevel !== prevReasoningLevel && directives.reasoningLevel !== undefined;
   }
