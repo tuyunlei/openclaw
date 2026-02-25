@@ -254,6 +254,7 @@ export function resolveCommandAuthorization(params: {
   ctx: MsgContext;
   cfg: OpenClawConfig;
   commandAuthorized: boolean;
+  senderIsOwner?: boolean;
 }): CommandAuthorization {
   const { ctx, cfg, commandAuthorized } = params;
   const providerId = resolveProviderFromContext(ctx, cfg);
@@ -341,7 +342,7 @@ export function resolveCommandAuthorization(params: {
   const senderId = matchedSender ?? senderCandidates[0];
 
   const enforceOwner = Boolean(dock?.commands?.enforceOwnerForCommands);
-  const senderIsOwner = Boolean(matchedSender);
+  const senderIsOwner = params.senderIsOwner === true || Boolean(matchedSender);
   const ownerAllowlistConfigured = ownerAllowAll || explicitOwners.length > 0;
   const requireOwner = enforceOwner || ownerAllowlistConfigured;
   const isOwnerForCommands = !requireOwner

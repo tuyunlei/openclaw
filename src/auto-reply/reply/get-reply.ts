@@ -140,6 +140,7 @@ export async function getReplyFromConfig(
     ctx: finalized,
     cfg,
     commandAuthorized,
+    senderIsOwner: resolvedOpts?.senderIsOwner,
   });
   const sessionState = await initSessionState({
     ctx: finalized,
