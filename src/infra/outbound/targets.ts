@@ -369,12 +369,24 @@ export function resolveHeartbeatSenderContext(params: {
     : [];
   const allowFrom = allowFromRaw.map((entry) => String(entry));
 
-  const sender = resolveHeartbeatSenderId({
+  let sender = resolveHeartbeatSenderId({
     allowFrom,
     deliveryTo: params.delivery.to,
     lastTo: params.entry?.lastTo,
     provider,
   });
+
+  // For group sessions, prefer lastTo (group address) over personal ID.
+  // This ensures ctx.From contains the group ID so downstream group resolution
+  // (extractGroupId, resolveGroupRequireMention) works correctly.
+  const entry = params.entry;
+  if (entry?.chatType === "group" && entry.lastTo) {
+    sender = entry.lastTo.includes(":")
+      ? entry.lastTo
+      : provider
+        ? `${provider}:${entry.lastTo}`
+        : entry.lastTo;
+  }
 
   return { sender, provider, allowFrom };
 }
