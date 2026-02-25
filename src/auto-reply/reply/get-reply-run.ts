@@ -243,8 +243,11 @@ export async function runPreparedReply(
   );
   // Always include persistent group chat context (name, participants, reply guidance)
   const groupChatContext = isGroupChat ? buildGroupChatContext({ sessionCtx }) : "";
-  // Behavioral intro (activation mode, lurking, etc.) only on first turn / activation needed
-  const groupIntro = shouldInjectGroupIntro
+  // Always include group intro in group chats to keep system prompt stable across turns.
+  // groupIntro content is session-stable (depends on activation mode, provider, silentToken —
+  // none of which change within a session). Previously only injected on first turn, causing
+  // a cache-breaking content change between turn 1 and turn 2 (~40k token CW per session).
+  const groupIntro = isGroupChat
     ? buildGroupIntro({
         cfg,
         sessionCtx,
