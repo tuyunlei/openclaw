@@ -13,12 +13,14 @@ export function buildCommandContext(params: {
   isGroup: boolean;
   triggerBodyNormalized: string;
   commandAuthorized: boolean;
+  senderIsOwner?: boolean;
 }): CommandContext {
   const { ctx, cfg, agentId, sessionKey, isGroup, triggerBodyNormalized } = params;
   const auth = resolveCommandAuthorization({
     ctx,
     cfg,
     commandAuthorized: params.commandAuthorized,
+    senderIsOwner: params.senderIsOwner,
   });
   const surface = (ctx.Surface ?? ctx.Provider ?? "").trim().toLowerCase();
   const channel = (ctx.Provider ?? surface).trim().toLowerCase();

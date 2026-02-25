@@ -107,6 +107,7 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
         isHeartbeat: true,
         heartbeatModelOverride: "ollama/llama3.2:1b",
         suppressToolErrorWarnings: false,
+        senderIsOwner: true,
       }),
     );
   });
@@ -117,6 +118,7 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
       expect.objectContaining({
         isHeartbeat: true,
         suppressToolErrorWarnings: true,
+        senderIsOwner: true,
       }),
     );
   });
@@ -167,6 +169,7 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
         expect.objectContaining({
           isHeartbeat: true,
           heartbeatModelOverride: "ollama/llama3.2:1b",
+          senderIsOwner: true,
         }),
         cfg,
       );
@@ -178,6 +181,7 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
     expect(replyOpts).toEqual(
       expect.objectContaining({
         isHeartbeat: true,
+        senderIsOwner: true,
       }),
     );
   });
@@ -188,6 +192,7 @@ describe("runHeartbeatOnce – heartbeat model override", () => {
       expect.objectContaining({
         isHeartbeat: true,
         heartbeatModelOverride: "ollama/llama3.2:1b",
+        senderIsOwner: true,
       }),
     );
   });

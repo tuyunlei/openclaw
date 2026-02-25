@@ -53,6 +53,8 @@ export type GetReplyOptions = {
   hasRepliedRef?: { value: boolean };
   /** Override agent timeout in seconds (0 = no timeout). Threads through to resolveAgentTimeoutMs. */
   timeoutOverrideSeconds?: number;
+  /** Trusted override for system-triggered runs that should retain owner-only tool access. */
+  senderIsOwner?: boolean;
 };
 
 export type ReplyPayload = {

@@ -163,6 +163,7 @@ export async function resolveReplyDirectives(params: {
     isGroup,
     triggerBodyNormalized,
     commandAuthorized,
+    senderIsOwner: opts?.senderIsOwner,
   });
   const allowTextCommands = shouldHandleTextCommands({
     cfg,

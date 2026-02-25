@@ -200,6 +200,7 @@ export async function runSessionInjectTurn(opts: {
         ctx: finalizeInboundContext(ctx),
         cfg,
         dispatcher,
+        replyOptions: { senderIsOwner: true },
         replyResolver: async (replyCtx, options, config) => {
           const result = await getReplyFromConfig(replyCtx, options, config);
           replyText = extractReplyText(result);
