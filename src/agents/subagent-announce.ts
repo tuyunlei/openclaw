@@ -753,13 +753,12 @@ async function sendSubagentAnnounceDirectly(params: {
       params: {
         sessionKey: canonicalRequesterSessionKey,
         message: params.triggerMessage,
-        deliver: isWorkflowMode ? false : !params.requesterIsSubagent,
+        deliver: !params.requesterIsSubagent,
         bestEffortDeliver: params.bestEffortDeliver,
-        channel: params.requesterIsSubagent || isWorkflowMode ? undefined : directOrigin?.channel,
-        accountId:
-          params.requesterIsSubagent || isWorkflowMode ? undefined : directOrigin?.accountId,
-        to: params.requesterIsSubagent || isWorkflowMode ? undefined : directOrigin?.to,
-        threadId: params.requesterIsSubagent || isWorkflowMode ? undefined : threadId,
+        channel: params.requesterIsSubagent ? undefined : directOrigin?.channel,
+        accountId: params.requesterIsSubagent ? undefined : directOrigin?.accountId,
+        to: params.requesterIsSubagent ? undefined : directOrigin?.to,
+        threadId: params.requesterIsSubagent ? undefined : threadId,
         idempotencyKey: params.directIdempotencyKey,
       },
       // Workflow mode: let requester agent continue orchestrating (no forced final reply).
@@ -975,10 +974,11 @@ function buildAnnounceReplyInstruction(params: {
   announceMode?: "notify" | "workflow";
 }): string {
   // Workflow mode: result is internal orchestration context for the requester
-  // agent. Process it according to your workflow instructions instead of
-  // sending a user-facing update.
+  // agent. The agent decides what (if anything) to tell the user — delivery
+  // is enabled so the agent CAN respond, but the instruction biases toward
+  // continuing orchestration rather than echoing every intermediate result.
   if (params.announceMode === "workflow") {
-    return "This subagent result is a workflow step completion. Process this result according to your workflow instructions. Do NOT send a user-facing message about this result — instead, continue your orchestration (e.g. spawn the next step, aggregate results, or finalize the workflow). Only send a user-facing message when the entire workflow is complete.";
+    return "A sub-agent task completed. Process the result above according to your workflow instructions. Do not send a user-facing update unless your workflow explicitly requires it at this step. Keep internal context private (don't mention system/log/stats/session details or announce type).";
   }
   if (params.remainingActiveSubagentRuns > 0) {
     const activeRunsLabel = params.remainingActiveSubagentRuns === 1 ? "run" : "runs";
