@@ -86,6 +86,16 @@ type TelegramReactionOpts = {
   retry?: RetryConfig;
 };
 
+function resolveTelegramMessageIdOrThrow(
+  result: TelegramMessageLike | null | undefined,
+  context: string,
+): number {
+  if (typeof result?.message_id === "number" && Number.isFinite(result.message_id)) {
+    return Math.trunc(result.message_id);
+  }
+  throw new Error(`Telegram ${context} returned no message_id`);
+}
+
 const PARSE_ERR_RE = /can't parse entities|parse entities|find end of the entity/i;
 const THREAD_NOT_FOUND_RE = /400:\s*Bad Request:\s*message thread not found/i;
 const MESSAGE_NOT_MODIFIED_RE =
@@ -93,7 +103,6 @@ const MESSAGE_NOT_MODIFIED_RE =
 const CHAT_NOT_FOUND_RE = /400: Bad Request: chat not found/i;
 const sendLogger = createSubsystemLogger("telegram/send");
 const diagLogger = createSubsystemLogger("telegram/diagnostic");
-const deliveryLogger = createSubsystemLogger("telegram/delivery");
 
 function createTelegramHttpLogger(cfg: ReturnType<typeof loadConfig>) {
   const enabled = isDiagnosticFlagEnabled("telegram.http", cfg);
@@ -452,7 +461,6 @@ export async function sendMessageTelegram(
   text: string,
   opts: TelegramSendOpts = {},
 ): Promise<TelegramSendResult> {
-  const startedAt = Date.now();
   const { cfg, account, api } = resolveTelegramApiContext(opts);
   const target = parseTelegramTarget(to);
   const chatId = await resolveAndPersistChatId({
@@ -522,8 +530,8 @@ export async function sendMessageTelegram(
         return await withTelegramHtmlParseFallback({
           label,
           verbose: opts.verbose,
-          requestHtml: async (retryLabel) => {
-            const res = await requestWithChatNotFound(
+          requestHtml: (retryLabel) =>
+            requestWithChatNotFound(
               () =>
                 api.sendMessage(
                   chatId,
@@ -531,21 +539,18 @@ export async function sendMessageTelegram(
                   sendParams as Parameters<typeof api.sendMessage>[2],
                 ),
               retryLabel,
-            );
-            return res;
-          },
-          requestPlain: async (retryLabel) => {
+            ),
+          requestPlain: (retryLabel) => {
             const plainParams = hasBaseParams
               ? (baseParams as Parameters<typeof api.sendMessage>[2])
               : undefined;
-            const res = await requestWithChatNotFound(
+            return requestWithChatNotFound(
               () =>
                 plainParams
                   ? api.sendMessage(chatId, fallbackText ?? rawText, plainParams)
                   : api.sendMessage(chatId, fallbackText ?? rawText),
               retryLabel,
             );
-            return res;
           },
         });
       },
@@ -690,11 +695,9 @@ export async function sendMessageTelegram(
     })();
 
     const result = await sendMedia(mediaSender.label, mediaSender.sender);
-    const mediaMessageId = String(result?.message_id ?? "unknown");
+    const mediaMessageId = resolveTelegramMessageIdOrThrow(result, "media send");
     const resolvedChatId = String(result?.chat?.id ?? chatId);
-    if (result?.message_id) {
-      recordSentMessage(chatId, result.message_id);
-    }
+    recordSentMessage(chatId, mediaMessageId);
     recordChannelActivity({
       channel: "telegram",
       accountId: account.accountId,
@@ -713,24 +716,15 @@ export async function sendMessageTelegram(
           : undefined;
       const textRes = await sendTelegramText(followUpText, textParams);
       // Return the text message ID as the "main" message (it's the actual content).
-      const messageId = String(textRes?.message_id ?? mediaMessageId);
-      deliveryLogger.info("sendMessageTelegram succeeded", {
-        chatId: resolvedChatId,
-        messageId,
-        durationMs: Date.now() - startedAt,
-      });
+      const textMessageId = resolveTelegramMessageIdOrThrow(textRes, "text follow-up send");
+      recordSentMessage(chatId, textMessageId);
       return {
-        messageId,
+        messageId: String(textMessageId),
         chatId: resolvedChatId,
       };
     }
 
-    deliveryLogger.info("sendMessageTelegram succeeded", {
-      chatId: resolvedChatId,
-      messageId: mediaMessageId,
-      durationMs: Date.now() - startedAt,
-    });
-    return { messageId: mediaMessageId, chatId: resolvedChatId };
+    return { messageId: String(mediaMessageId), chatId: resolvedChatId };
   }
 
   if (!text || !text.trim()) {
@@ -744,22 +738,14 @@ export async function sendMessageTelegram(
         }
       : undefined;
   const res = await sendTelegramText(text, textParams, opts.plainText);
-  const messageId = String(res?.message_id ?? "unknown");
-  if (res?.message_id) {
-    recordSentMessage(chatId, res.message_id);
-  }
+  const messageId = resolveTelegramMessageIdOrThrow(res, "text send");
+  recordSentMessage(chatId, messageId);
   recordChannelActivity({
     channel: "telegram",
     accountId: account.accountId,
     direction: "outbound",
   });
-  const resolvedChatId = String(res?.chat?.id ?? chatId);
-  deliveryLogger.info("sendMessageTelegram succeeded", {
-    chatId: resolvedChatId,
-    messageId,
-    durationMs: Date.now() - startedAt,
-  });
-  return { messageId, chatId: resolvedChatId };
+  return { messageId: String(messageId), chatId: String(res?.chat?.id ?? chatId) };
 }
 
 export async function reactMessageTelegram(
@@ -864,7 +850,6 @@ export async function editMessageTelegram(
   text: string,
   opts: TelegramEditOpts = {},
 ): Promise<{ ok: true; messageId: string; chatId: string }> {
-  const startedAt = Date.now();
   const { cfg, account, api } = resolveTelegramApiContext({
     ...opts,
     cfg: opts.cfg,
@@ -951,11 +936,7 @@ export async function editMessageTelegram(
     }
   }
 
-  deliveryLogger.info("editMessageTelegram succeeded", {
-    chatId,
-    messageId,
-    durationMs: Date.now() - startedAt,
-  });
+  logVerbose(`[telegram] Edited message ${messageId} in chat ${chatId}`);
   return { ok: true, messageId: String(messageId), chatId };
 }
 
@@ -1040,18 +1021,16 @@ export async function sendStickerTelegram(
       requestWithChatNotFound(() => api.sendSticker(chatId, fileId.trim(), effectiveParams), label),
   );
 
-  const messageId = String(result?.message_id ?? "unknown");
+  const messageId = resolveTelegramMessageIdOrThrow(result, "sticker send");
   const resolvedChatId = String(result?.chat?.id ?? chatId);
-  if (result?.message_id) {
-    recordSentMessage(chatId, result.message_id);
-  }
+  recordSentMessage(chatId, messageId);
   recordChannelActivity({
     channel: "telegram",
     accountId: account.accountId,
     direction: "outbound",
   });
 
-  return { messageId, chatId: resolvedChatId };
+  return { messageId: String(messageId), chatId: resolvedChatId };
 }
 
 type TelegramPollOpts = {
@@ -1148,12 +1127,10 @@ export async function sendPollTelegram(
       ),
   );
 
-  const messageId = String(result?.message_id ?? "unknown");
+  const messageId = resolveTelegramMessageIdOrThrow(result, "poll send");
   const resolvedChatId = String(result?.chat?.id ?? chatId);
   const pollId = result?.poll?.id;
-  if (result?.message_id) {
-    recordSentMessage(chatId, result.message_id);
-  }
+  recordSentMessage(chatId, messageId);
 
   recordChannelActivity({
     channel: "telegram",
@@ -1161,7 +1138,7 @@ export async function sendPollTelegram(
     direction: "outbound",
   });
 
-  return { messageId, chatId: resolvedChatId, pollId };
+  return { messageId: String(messageId), chatId: resolvedChatId, pollId };
 }
 
 // ---------------------------------------------------------------------------
