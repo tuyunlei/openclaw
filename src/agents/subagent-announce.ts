@@ -713,6 +713,7 @@ async function sendSubagentAnnounceDirectly(params: {
   completionDirectOrigin?: DeliveryContext;
   directOrigin?: DeliveryContext;
   requesterIsSubagent: boolean;
+  announceMode?: "notify" | "workflow";
   signal?: AbortSignal;
 }): Promise<SubagentAnnounceDeliveryResult> {
   if (params.signal?.aborted) {
@@ -721,6 +722,7 @@ async function sendSubagentAnnounceDirectly(params: {
       path: "none",
     };
   }
+  const isWorkflowMode = params.announceMode === "workflow";
   const cfg = loadConfig();
   const announceTimeoutMs = resolveSubagentAnnounceTimeoutMs(cfg);
   const canonicalRequesterSessionKey = resolveRequesterStoreKey(
@@ -743,6 +745,7 @@ async function sendSubagentAnnounceDirectly(params: {
       !params.requesterIsSubagent && Boolean(completionChannel) && Boolean(completionTo);
 
     if (
+      !isWorkflowMode &&
       params.expectsCompletionMessage &&
       hasCompletionDirectTarget &&
       params.completionMessage?.trim()
@@ -815,6 +818,7 @@ async function sendSubagentAnnounceDirectly(params: {
     const hasDeliverableDirectTarget =
       !params.requesterIsSubagent && Boolean(directChannel) && Boolean(directTo);
     const shouldDeliverExternally =
+      !isWorkflowMode &&
       !params.requesterIsSubagent &&
       (!params.expectsCompletionMessage || hasDeliverableDirectTarget);
     const threadId =
@@ -877,21 +881,27 @@ async function deliverSubagentAnnouncement(params: {
   bestEffortDeliver?: boolean;
   completionRouteMode?: "bound" | "fallback" | "hook";
   spawnMode?: SpawnSubagentMode;
+  announceMode?: "notify" | "workflow";
   directIdempotencyKey: string;
   signal?: AbortSignal;
 }): Promise<SubagentAnnounceDeliveryResult> {
   return await runSubagentAnnounceDispatch({
     expectsCompletionMessage: params.expectsCompletionMessage,
     signal: params.signal,
-    queue: async () =>
-      await maybeQueueSubagentAnnounce({
-        requesterSessionKey: params.requesterSessionKey,
-        announceId: params.announceId,
-        triggerMessage: params.triggerMessage,
-        summaryLine: params.summaryLine,
-        requesterOrigin: params.requesterOrigin,
-        signal: params.signal,
-      }),
+    // Workflow mode skips the queue path: queued items may re-deliver
+    // externally when dequeued, which would break internal-only semantics.
+    queue:
+      params.announceMode === "workflow"
+        ? async () => "none" as const
+        : async () =>
+            await maybeQueueSubagentAnnounce({
+              requesterSessionKey: params.requesterSessionKey,
+              announceId: params.announceId,
+              triggerMessage: params.triggerMessage,
+              summaryLine: params.summaryLine,
+              requesterOrigin: params.requesterOrigin,
+              signal: params.signal,
+            }),
     direct: async () =>
       await sendSubagentAnnounceDirectly({
         targetRequesterSessionKey: params.targetRequesterSessionKey,
@@ -903,6 +913,7 @@ async function deliverSubagentAnnouncement(params: {
         spawnMode: params.spawnMode,
         directOrigin: params.directOrigin,
         requesterIsSubagent: params.requesterIsSubagent,
+        announceMode: params.announceMode,
         expectsCompletionMessage: params.expectsCompletionMessage,
         signal: params.signal,
         bestEffortDeliver: params.bestEffortDeliver,
@@ -1054,6 +1065,7 @@ export async function runSubagentAnnounceFlow(params: {
   announceType?: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
   spawnMode?: SpawnSubagentMode;
+  announceMode?: "notify" | "workflow";
   signal?: AbortSignal;
   bestEffortDeliver?: boolean;
 }): Promise<boolean> {
@@ -1320,6 +1332,7 @@ export async function runSubagentAnnounceFlow(params: {
       bestEffortDeliver: params.bestEffortDeliver,
       completionRouteMode: completionResolution.routeMode,
       spawnMode: params.spawnMode,
+      announceMode: params.announceMode,
       directIdempotencyKey,
       signal: params.signal,
     });

@@ -673,17 +673,41 @@ export async function runHeartbeatOnce(opts: {
     preflight,
     canRelayToUser,
   });
-  const ctx = {
+  const entryProvider = entry?.lastChannel ?? "heartbeat";
+  const ctx: Record<string, unknown> = {
     Body: appendCronStyleCurrentTimeLine(prompt, cfg, startedAt),
     From: sender,
     To: sender,
-    OriginatingChannel: delivery.channel !== "none" ? delivery.channel : undefined,
+    OriginatingChannel:
+      delivery.channel !== "none" ? delivery.channel : (delivery.lastChannel ?? undefined),
     OriginatingTo: delivery.to,
     AccountId: delivery.accountId,
     MessageThreadId: delivery.threadId,
-    Provider: hasExecCompletion ? "exec-event" : hasCronEvents ? "cron-event" : "heartbeat",
+    Provider: hasExecCompletion ? "exec-event" : hasCronEvents ? "cron-event" : entryProvider,
     SessionKey: sessionKey,
   };
+  // Replay group-chat context from the session entry so that the system prompt
+  // is byte-identical to a real message turn, enabling Anthropic prompt-cache hits.
+  if (entry) {
+    if (entry.chatType) {
+      ctx.ChatType = entry.chatType;
+    }
+    if (entry.subject) {
+      ctx.GroupSubject = entry.subject;
+    }
+    if (entry.groupMembers) {
+      ctx.GroupMembers = entry.groupMembers;
+    }
+    if (entry.groupSystemPrompt) {
+      ctx.GroupSystemPrompt = entry.groupSystemPrompt;
+    }
+    if (entry.groupChannel) {
+      ctx.GroupChannel = entry.groupChannel;
+    }
+    if (entry.space) {
+      ctx.GroupSpace = entry.space;
+    }
+  }
   if (!visibility.showAlerts && !visibility.showOk && !visibility.useIndicator) {
     emitHeartbeatEvent({
       status: "skipped",
