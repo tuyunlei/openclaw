@@ -155,7 +155,7 @@ describe("createAnthropicPayloadLogger", () => {
         usage: { input_tokens: 10, output_tokens: 5 },
       },
     ];
-    logger!.recordUsage(messages as AgentMessage[]);
+    logger!.recordUsage(messages as unknown as AgentMessage[]);
 
     expect(writer1.lines.length).toBe(1);
     expect(writer2.lines.length).toBe(1);
