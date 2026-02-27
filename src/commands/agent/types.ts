@@ -74,6 +74,8 @@ export type AgentCommandOpts = {
   runId?: string;
   extraSystemPrompt?: string;
   inputProvenance?: InputProvenance;
+  /** Force owner authorization for system-triggered internal runs. */
+  senderIsOwner?: boolean;
   /** Per-call stream param overrides (best-effort). */
   streamParams?: AgentStreamParams;
 };

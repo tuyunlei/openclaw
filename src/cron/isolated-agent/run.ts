@@ -474,6 +474,7 @@ export async function runCronIsolatedAgentTurn(params: {
             messageChannel,
             accountId: resolvedDelivery.accountId,
           }),
+          senderIsOwner: true,
           abortSignal,
         });
       },

@@ -196,7 +196,7 @@ function runAgentAttempt(params: {
     currentThreadTs: params.runContext.currentThreadTs,
     replyToMode: params.runContext.replyToMode,
     hasRepliedRef: params.runContext.hasRepliedRef,
-    senderIsOwner: true,
+    senderIsOwner: params.opts.senderIsOwner ?? true,
     sessionFile: params.sessionFile,
     workspaceDir: params.workspaceDir,
     config: params.cfg,

@@ -197,6 +197,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       label?: string;
       spawnedBy?: string;
       inputProvenance?: InputProvenance;
+      senderIsOwner?: boolean;
     };
     const cfg = loadConfig();
     const idem = request.idempotencyKey;
@@ -623,6 +624,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         lane: request.lane,
         extraSystemPrompt: request.extraSystemPrompt,
         inputProvenance,
+        senderIsOwner: request.senderIsOwner === true,
       },
       defaultRuntime,
       context.deps,
