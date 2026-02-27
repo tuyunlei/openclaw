@@ -506,4 +506,5 @@ export function saveAuthProfileStore(store: AuthProfileStore, agentDir?: string)
     usageStats: store.usageStats ?? undefined,
   } satisfies AuthProfileStore;
   saveJsonFile(authPath, payload);
+  clearRuntimeAuthProfileStoreSnapshots();
 }
