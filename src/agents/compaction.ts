@@ -23,7 +23,7 @@ async function dumpCompactionPayload(
   summary?: string,
 ): Promise<void> {
   try {
-    const dumpDir = resolveUserPath(".openclaw/compaction-dumps");
+    const dumpDir = resolveUserPath("~/.openclaw/compaction-dumps");
     await fs.mkdir(dumpDir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `${ts}_${stage.replace(/\//g, "_")}_chunk${chunkIndex}`;

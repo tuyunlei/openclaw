@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Pre-merge-commit hook: enforce CHANGELOG.md coverage for xtu/main merges.
+#
+# When merging into xtu/main, checks that every non-merge commit being
+# introduced has its short hash listed in CHANGELOG.md.
+# If any are missing, prints them and aborts the merge.
+
+set -euo pipefail
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+
+# Only enforce on xtu/main
+if [[ "$BRANCH" != "xtu/main" ]]; then
+  exit 0
+fi
+
+MERGE_HEAD_FILE="$(git rev-parse --git-dir)/MERGE_HEAD"
+if [[ ! -f "$MERGE_HEAD_FILE" ]]; then
+  exit 0
+fi
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+CHANGELOG="$ROOT_DIR/../CHANGELOG.md"
+
+if [[ ! -f "$CHANGELOG" ]]; then
+  echo "⚠️  CHANGELOG.md not found at $CHANGELOG — skipping check."
+  exit 0
+fi
+
+MERGE_HEAD=$(cat "$MERGE_HEAD_FILE")
+
+# Get non-merge commits being introduced
+NEW_COMMITS=$(git log HEAD.."$MERGE_HEAD" --no-merges --format="%h %s" 2>/dev/null || true)
+
+if [[ -z "$NEW_COMMITS" ]]; then
+  exit 0
+fi
+
+MISSING=()
+while IFS= read -r line; do
+  HASH="${line%% *}"
+  if ! grep -q "$HASH" "$CHANGELOG"; then
+    MISSING+=("$line")
+  fi
+done <<< "$NEW_COMMITS"
+
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+  echo ""
+  echo "❌ CHANGELOG.md 缺少以下 commit（合入 xtu/main 前必须先更新 CHANGELOG.md）:"
+  echo ""
+  for m in "${MISSING[@]}"; do
+    echo "   $m"
+  done
+  echo ""
+  echo "请在 xtu/develop 上更新 CHANGELOG.md 后再合并。"
+  echo "跳过检查：git merge --no-verify"
+  echo ""
+  exit 1
+fi
