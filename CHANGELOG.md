@@ -2,6 +2,16 @@
 
 Docs: https://docs.openclaw.ai
 
+## 2026.2.27 (xtu)
+
+### Fixes (cache stability)
+
+- fix: use absolute path for compaction dump directory — `resolveUserPath(".openclaw/compaction-dumps")` resolved relative to CWD (workspace), writing dumps to wrong location. Added `~/` prefix. (`3044d886e`)
+
+### Merge
+
+- merge: origin/main (417 commits) into xtu/develop — resolved conflicts in `system-prompt.ts` (announceMode + ACP descriptions) and `sessions-spawn-tool.ts` (ANNOUNCE_MODES + ACP runtime branching). (`6519db385`)
+
 ## 2026.2.26
 
 ### Changes
