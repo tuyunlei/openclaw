@@ -260,7 +260,7 @@ export function buildAgentSystemPrompt(params: {
     sessions_history: "Fetch history for another session/sub-agent",
     sessions_send: "Send a message to another session/sub-agent",
     sessions_spawn: acpEnabled
-      ? 'Spawn a sub-agent or ACP coding session (runtime="acp" requires `agentId` unless `acp.defaultAgent` is configured). mode="run" (default) for one-shot tasks, mode="session" for persistent thread-bound sessions. announceMode="notify" (default) sends result to user; announceMode="workflow" injects result as internal context only, letting the requester agent control the next step'
+      ? 'Spawn an isolated sub-agent or ACP coding session (runtime="acp" requires `agentId` unless `acp.defaultAgent` is configured; ACP harness ids follow acp.allowedAgents, not agents_list). mode="run" (default) for one-shot tasks, mode="session" for persistent thread-bound sessions. announceMode="notify" (default) sends result to user; announceMode="workflow" injects result as internal context only, letting the requester agent control the next step'
       : 'Spawn a sub-agent session. mode="run" (default) for one-shot tasks, mode="session" for persistent thread-bound sessions. announceMode="notify" (default) sends result to user; announceMode="workflow" injects result as internal context only, letting the requester agent control the next step',
     subagents: "List, steer, or kill sub-agent runs for this requester session",
     session_status:
