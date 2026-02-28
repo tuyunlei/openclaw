@@ -32,6 +32,12 @@ import {
 } from "../infra/outbound/session-binding-service.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
+import { registerSubagentRun } from "./subagent-registry.js";
+import {
+  resolveDisplaySessionKey,
+  resolveInternalSessionKey,
+  resolveMainSessionAlias,
+} from "./tools/sessions-helpers.js";
 
 export const ACP_SPAWN_MODES = ["run", "session"] as const;
 export type SpawnAcpMode = (typeof ACP_SPAWN_MODES)[number];
@@ -43,6 +49,7 @@ export type SpawnAcpParams = {
   cwd?: string;
   mode?: SpawnAcpMode;
   thread?: boolean;
+  announceMode?: "notify" | "workflow";
 };
 
 export type SpawnAcpContext = {
@@ -222,6 +229,20 @@ export async function spawnAcpDirect(
   ctx: SpawnAcpContext,
 ): Promise<SpawnAcpResult> {
   const cfg = loadConfig();
+  const { mainKey, alias } = resolveMainSessionAlias(cfg);
+  const requesterInternalKey = ctx.agentSessionKey
+    ? resolveInternalSessionKey({
+        key: ctx.agentSessionKey,
+        alias,
+        mainKey,
+      })
+    : alias;
+  const requesterDisplayKey = resolveDisplaySessionKey({
+    key: requesterInternalKey,
+    alias,
+    mainKey,
+  });
+
   if (!isAcpEnabledByPolicy(cfg)) {
     return {
       status: "forbidden",
@@ -385,6 +406,8 @@ export async function spawnAcpDirect(
     ? `channel:${boundThreadId}`
     : requesterOrigin?.to?.trim() || (deliveryThreadId ? `channel:${deliveryThreadId}` : undefined);
   const hasDeliveryTarget = Boolean(requesterOrigin?.channel && inferredDeliveryTo);
+  const workflowMode = params.announceMode === "workflow";
+  const shouldDeliverToUser = hasDeliveryTarget && !workflowMode;
   const childIdem = crypto.randomUUID();
   let childRunId: string = childIdem;
   try {
@@ -393,12 +416,12 @@ export async function spawnAcpDirect(
       params: {
         message: params.task,
         sessionKey,
-        channel: hasDeliveryTarget ? requesterOrigin?.channel : undefined,
-        to: hasDeliveryTarget ? inferredDeliveryTo : undefined,
-        accountId: hasDeliveryTarget ? (requesterOrigin?.accountId ?? undefined) : undefined,
-        threadId: hasDeliveryTarget ? deliveryThreadId : undefined,
+        channel: shouldDeliverToUser ? requesterOrigin?.channel : undefined,
+        to: shouldDeliverToUser ? inferredDeliveryTo : undefined,
+        accountId: shouldDeliverToUser ? (requesterOrigin?.accountId ?? undefined) : undefined,
+        threadId: shouldDeliverToUser ? deliveryThreadId : undefined,
         idempotencyKey: childIdem,
-        deliver: hasDeliveryTarget,
+        deliver: shouldDeliverToUser,
         label: params.label || undefined,
       },
       timeoutMs: 10_000,
@@ -418,6 +441,22 @@ export async function spawnAcpDirect(
       error: summarizeError(err),
       childSessionKey: sessionKey,
     };
+  }
+
+  if (workflowMode) {
+    registerSubagentRun({
+      runId: childRunId,
+      childSessionKey: sessionKey,
+      requesterSessionKey: requesterInternalKey,
+      requesterOrigin,
+      requesterDisplayKey,
+      task: params.task,
+      cleanup: "keep",
+      label: params.label || undefined,
+      runTimeoutSeconds: 0,
+      spawnMode,
+      announceMode: params.announceMode,
+    });
   }
 
   return {

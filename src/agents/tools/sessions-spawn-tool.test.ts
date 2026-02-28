@@ -94,6 +94,7 @@ describe("sessions_spawn tool", () => {
       cwd: "/workspace",
       thread: true,
       mode: "session",
+      announceMode: "workflow",
     });
 
     expect(result.details).toMatchObject({
@@ -108,6 +109,7 @@ describe("sessions_spawn tool", () => {
         cwd: "/workspace",
         thread: true,
         mode: "session",
+        announceMode: "workflow",
       }),
       expect.objectContaining({
         agentSessionKey: "agent:main:main",

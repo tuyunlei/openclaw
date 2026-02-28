@@ -11,6 +11,7 @@ const hoisted = vi.hoisted(() => {
   const sessionBindingListBySessionMock = vi.fn();
   const closeSessionMock = vi.fn();
   const initializeSessionMock = vi.fn();
+  const registerSubagentRunMock = vi.fn();
   const state = {
     cfg: {
       acp: {
@@ -41,6 +42,7 @@ const hoisted = vi.hoisted(() => {
     sessionBindingListBySessionMock,
     closeSessionMock,
     initializeSessionMock,
+    registerSubagentRunMock,
     state,
   };
 });
@@ -82,6 +84,10 @@ vi.mock("../infra/outbound/session-binding-service.js", async (importOriginal) =
     }),
   };
 });
+
+vi.mock("./subagent-registry.js", () => ({
+  registerSubagentRun: (params: unknown) => hoisted.registerSubagentRunMock(params),
+}));
 
 const { spawnAcpDirect } = await import("./acp-spawn.js");
 
@@ -219,6 +225,7 @@ describe("spawnAcpDirect", () => {
     hoisted.sessionBindingResolveByConversationMock.mockReset().mockReturnValue(null);
     hoisted.sessionBindingListBySessionMock.mockReset().mockReturnValue([]);
     hoisted.sessionBindingUnbindMock.mockReset().mockResolvedValue([]);
+    hoisted.registerSubagentRunMock.mockReset();
   });
 
   it("spawns ACP session, binds a new thread, and dispatches initial task", async () => {
@@ -265,6 +272,7 @@ describe("spawnAcpDirect", () => {
     expect(agentCall?.params?.to).toBe("channel:child-thread");
     expect(agentCall?.params?.threadId).toBe("child-thread");
     expect(agentCall?.params?.deliver).toBe(true);
+    expect(hoisted.registerSubagentRunMock).not.toHaveBeenCalled();
     expect(hoisted.initializeSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionKey: expect.stringMatching(/^agent:codex:acp:/),
@@ -297,6 +305,46 @@ describe("spawnAcpDirect", () => {
         metadata: expect.objectContaining({
           introText: expect.stringContaining("cwd: /home/bob/clawd"),
         }),
+      }),
+    );
+  });
+
+  it("registers ACP run for workflow announce mode and suppresses user delivery", async () => {
+    const result = await spawnAcpDirect(
+      {
+        task: "Investigate flaky tests",
+        agentId: "codex",
+        mode: "session",
+        thread: true,
+        announceMode: "workflow",
+      },
+      {
+        agentSessionKey: "agent:main:main",
+        agentChannel: "discord",
+        agentAccountId: "default",
+        agentTo: "channel:parent-channel",
+        agentThreadId: "requester-thread",
+      },
+    );
+
+    expect(result.status).toBe("accepted");
+
+    const agentCall = hoisted.callGatewayMock.mock.calls
+      .map((call: unknown[]) => call[0] as { method?: string; params?: Record<string, unknown> })
+      .find((request) => request.method === "agent");
+    expect(agentCall?.params?.deliver).toBe(false);
+    expect(agentCall?.params?.channel).toBeUndefined();
+    expect(agentCall?.params?.to).toBeUndefined();
+
+    expect(hoisted.registerSubagentRunMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "run-1",
+        childSessionKey: expect.stringMatching(/^agent:codex:acp:/),
+        requesterSessionKey: "agent:main:main",
+        requesterDisplayKey: "agent:main:main",
+        announceMode: "workflow",
+        spawnMode: "session",
+        cleanup: "keep",
       }),
     );
   });
