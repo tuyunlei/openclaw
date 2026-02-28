@@ -454,6 +454,7 @@ export async function spawnAcpDirect(
       cleanup: "keep",
       label: params.label || undefined,
       runTimeoutSeconds: 0,
+      expectsCompletionMessage: false,
       spawnMode,
       announceMode: params.announceMode,
     });

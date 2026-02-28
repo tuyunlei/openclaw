@@ -1,4 +1,5 @@
 import type { OpenClawConfig } from "../../config/config.js";
+import { appendAssistantMessageToSessionTranscript } from "../../config/sessions/transcript.js";
 import { logVerbose } from "../../globals.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import { isAcpSessionKey } from "../../sessions/session-key-utils.js";
@@ -66,6 +67,13 @@ import {
   validateRuntimeOptionPatch,
 } from "./runtime-options.js";
 import { SessionActorQueue } from "./session-actor-queue.js";
+
+/**
+ * Cache of ACP turn output text, keyed by sessionKey.
+ * ACP sessions do not have transcript files, so subagent-announce
+ * reads output from this cache instead of session history.
+ */
+export const acpOutputCache = new Map<string, string>();
 
 export class AcpSessionManager {
   private readonly actorQueue = new SessionActorQueue();
@@ -678,6 +686,7 @@ export class AcpSessionManager {
       this.activeTurnBySession.set(actorKey, activeTurn);
 
       let streamError: AcpRuntimeError | null = null;
+      let _accumulatedOutput = "";
       try {
         const combinedSignal =
           input.signal && typeof AbortSignal.any === "function"
@@ -696,6 +705,10 @@ export class AcpSessionManager {
               event.message?.trim() || "ACP turn failed before completion.",
             );
           }
+          // Accumulate text_delta output for transcript persistence
+          if (event.type === "text_delta" && "text" in event && (event as { text?: string }).text) {
+            _accumulatedOutput += (event as { text: string }).text;
+          }
           if (input.onEvent) {
             await input.onEvent(event);
           }
@@ -706,6 +719,19 @@ export class AcpSessionManager {
         this.recordTurnCompletion({
           startedAt: turnStartedAt,
         });
+        const turnOutputText = _accumulatedOutput.trim();
+        if (turnOutputText) {
+          const persisted = await appendAssistantMessageToSessionTranscript({
+            sessionKey,
+            text: turnOutputText,
+          });
+          if (!persisted.ok) {
+            acpOutputCache.set(sessionKey, turnOutputText);
+            logVerbose(
+              `acp manager: transcript persistence failed for ${sessionKey}; cached ${turnOutputText.length} chars output instead (${persisted.reason})`,
+            );
+          }
+        }
         await this.setSessionState({
           cfg: input.cfg,
           sessionKey,

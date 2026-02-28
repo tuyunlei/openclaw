@@ -1,3 +1,4 @@
+import { acpOutputCache } from "../acp/control-plane/manager.core.js";
 import { resolveQueueSettings } from "../auto-reply/reply/queue.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH } from "../config/agent-limits.js";
@@ -312,6 +313,16 @@ async function readLatestSubagentOutput(sessionKey: string): Promise<string | un
     if (text) {
       return text;
     }
+  }
+  // Fallback: use in-memory ACP output cache when transcript path is unavailable.
+  const cachedOutput = acpOutputCache.get(sessionKey);
+  if (cachedOutput?.trim()) {
+    defaultRuntime.log(
+      `[warn] subagent-announce: using ACP output cache fallback for ${sessionKey}; transcript output was unavailable`,
+    );
+    // Consume the cache entry to avoid stale reads on subsequent calls.
+    acpOutputCache.delete(sessionKey);
+    return cachedOutput;
   }
   return undefined;
 }

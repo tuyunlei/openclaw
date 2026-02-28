@@ -345,6 +345,7 @@ describe("spawnAcpDirect", () => {
         announceMode: "workflow",
         spawnMode: "session",
         cleanup: "keep",
+        expectsCompletionMessage: false,
       }),
     );
   });
