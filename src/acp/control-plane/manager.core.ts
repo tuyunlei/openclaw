@@ -721,7 +721,10 @@ export class AcpSessionManager {
         });
         const turnOutputText = _accumulatedOutput.trim();
         if (turnOutputText) {
+          // Extract agentId from sessionKey (format: "agent:<agentId>:acp:<uuid>")
+          const agentId = sessionKey.split(":")[1] || undefined;
           const persisted = await appendAssistantMessageToSessionTranscript({
+            agentId,
             sessionKey,
             text: turnOutputText,
           });
