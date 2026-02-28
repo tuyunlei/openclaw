@@ -821,6 +821,9 @@ async function sendSubagentAnnounceDirectly(params: {
       !isWorkflowMode &&
       !params.requesterIsSubagent &&
       (!params.expectsCompletionMessage || hasDeliverableDirectTarget);
+    // Workflow mode: the orchestrator agent's reply should be delivered — it
+    // decides via ANNOUNCE_SKIP whether to stay silent.
+    const shouldDeliver = shouldDeliverExternally || isWorkflowMode;
     const threadId =
       directOrigin?.threadId != null && directOrigin.threadId !== ""
         ? String(directOrigin.threadId)
@@ -840,12 +843,12 @@ async function sendSubagentAnnounceDirectly(params: {
           params: {
             sessionKey: canonicalRequesterSessionKey,
             message: params.triggerMessage,
-            deliver: shouldDeliverExternally,
+            deliver: shouldDeliver,
             bestEffortDeliver: params.bestEffortDeliver,
-            channel: shouldDeliverExternally ? directChannel : undefined,
-            accountId: shouldDeliverExternally ? directOrigin?.accountId : undefined,
-            to: shouldDeliverExternally ? directTo : undefined,
-            threadId: shouldDeliverExternally ? threadId : undefined,
+            channel: shouldDeliver ? directChannel : undefined,
+            accountId: shouldDeliver ? directOrigin?.accountId : undefined,
+            to: shouldDeliver ? directTo : undefined,
+            threadId: shouldDeliver ? threadId : undefined,
             idempotencyKey: params.directIdempotencyKey,
           },
           expectFinal: true,
