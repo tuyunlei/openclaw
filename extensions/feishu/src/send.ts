@@ -13,6 +13,7 @@ export type FeishuMessageInfo = {
   chatId: string;
   senderId?: string;
   senderOpenId?: string;
+  senderType?: string;
   content: string;
   contentType: string;
   createTime?: number;
@@ -72,6 +73,17 @@ export async function getMessageFeishu(params: {
       const parsed = JSON.parse(content);
       if (item.msg_type === "text" && parsed.text) {
         content = parsed.text;
+      } else if (item.msg_type === "interactive" && parsed.elements) {
+        // Extract text from interactive card
+        const texts: string[] = [];
+        for (const element of parsed.elements) {
+          if (element.tag === "div" && element.text?.content) {
+            texts.push(element.text.content);
+          } else if (element.tag === "markdown" && element.content) {
+            texts.push(element.content);
+          }
+        }
+        content = texts.join("\n") || "[Interactive Card]";
       }
     } catch {
       // Keep raw content if parsing fails
@@ -82,6 +94,7 @@ export async function getMessageFeishu(params: {
       chatId: item.chat_id ?? "",
       senderId: item.sender?.id,
       senderOpenId: item.sender?.id_type === "open_id" ? item.sender?.id : undefined,
+      senderType: item.sender?.sender_type,
       content,
       contentType: item.msg_type ?? "text",
       createTime: item.create_time ? parseInt(item.create_time, 10) : undefined,
@@ -96,12 +109,12 @@ export type SendFeishuMessageParams = {
   to: string;
   text: string;
   replyToMessageId?: string;
+  /** When true, reply creates a Feishu topic thread instead of an inline reply */
+  replyInThread?: boolean;
   /** Mention target users */
   mentions?: MentionTarget[];
   /** Account ID (optional, uses default if not specified) */
   accountId?: string;
-  /** Reply in thread mode — creates a topic thread instead of replying in the main chat */
-  replyInThread?: boolean;
 };
 
 function buildFeishuPostMessagePayload(params: { messageText: string }): {
@@ -129,7 +142,7 @@ function buildFeishuPostMessagePayload(params: { messageText: string }): {
 export async function sendMessageFeishu(
   params: SendFeishuMessageParams,
 ): Promise<FeishuSendResult> {
-  const { cfg, to, text, replyToMessageId, mentions, accountId, replyInThread } = params;
+  const { cfg, to, text, replyToMessageId, replyInThread, mentions, accountId } = params;
   const { client, receiveId, receiveIdType } = resolveFeishuSendTarget({ cfg, to, accountId });
   const tableMode = getFeishuRuntime().channel.text.resolveMarkdownTableMode({
     cfg,
@@ -175,13 +188,13 @@ export type SendFeishuCardParams = {
   to: string;
   card: Record<string, unknown>;
   replyToMessageId?: string;
-  accountId?: string;
-  /** Reply in thread mode — creates a topic thread instead of replying in the main chat */
+  /** When true, reply creates a Feishu topic thread instead of an inline reply */
   replyInThread?: boolean;
+  accountId?: string;
 };
 
 export async function sendCardFeishu(params: SendFeishuCardParams): Promise<FeishuSendResult> {
-  const { cfg, to, card, replyToMessageId, accountId, replyInThread } = params;
+  const { cfg, to, card, replyToMessageId, replyInThread, accountId } = params;
   const { client, receiveId, receiveIdType } = resolveFeishuSendTarget({ cfg, to, accountId });
   const content = JSON.stringify(card);
 
@@ -266,20 +279,19 @@ export async function sendMarkdownCardFeishu(params: {
   to: string;
   text: string;
   replyToMessageId?: string;
+  /** When true, reply creates a Feishu topic thread instead of an inline reply */
+  replyInThread?: boolean;
   /** Mention target users */
   mentions?: MentionTarget[];
   accountId?: string;
-  /** Reply in thread mode */
-  replyInThread?: boolean;
 }): Promise<FeishuSendResult> {
-  const { cfg, to, text, replyToMessageId, mentions, accountId, replyInThread } = params;
-  // Build message content (with @mention support)
+  const { cfg, to, text, replyToMessageId, replyInThread, mentions, accountId } = params;
   let cardText = text;
   if (mentions && mentions.length > 0) {
     cardText = buildMentionedCardContent(mentions, text);
   }
   const card = buildMarkdownCard(cardText);
-  return sendCardFeishu({ cfg, to, card, replyToMessageId, accountId, replyInThread });
+  return sendCardFeishu({ cfg, to, card, replyToMessageId, replyInThread, accountId });
 }
 
 /**

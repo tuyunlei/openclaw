@@ -213,6 +213,10 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
     // Model resolution: ctx.model is undefined in compact.ts workflow (extensionRunner.initialize() is never called).
     // Fall back to runtime.model which is explicitly passed when building extension paths.
     const runtime = getCompactionSafeguardRuntime(ctx.sessionManager);
+    const summarizationInstructions = {
+      identifierPolicy: runtime?.identifierPolicy,
+      identifierInstructions: runtime?.identifierInstructions,
+    };
     const model = ctx.model ?? runtime?.model;
     if (!model) {
       // Log warning once per session when both models are missing (diagnostic for future issues).
@@ -303,6 +307,7 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
                     maxChunkTokens: droppedMaxChunkTokens,
                     contextWindow: contextWindowTokens,
                     customInstructions,
+                    summarizationInstructions,
                     previousSummary: preparation.previousSummary,
                     stageLabel: droppedLabel,
                   });
@@ -367,6 +372,7 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
           maxChunkTokens,
           contextWindow: contextWindowTokens,
           customInstructions,
+          summarizationInstructions,
           previousSummary: effectivePreviousSummary,
           stageLabel: historyLabel,
         });
@@ -404,6 +410,7 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
             maxChunkTokens,
             contextWindow: contextWindowTokens,
             customInstructions: TURN_PREFIX_INSTRUCTIONS,
+            summarizationInstructions,
             previousSummary: undefined,
             stageLabel: prefixLabel,
           });
