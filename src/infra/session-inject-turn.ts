@@ -132,9 +132,7 @@ export async function runSessionInjectTurn(opts: {
   const effectiveThreadId =
     delivery.threadId ?? parsed.threadId ?? entry.lastThreadId ?? entry.deliveryContext?.threadId;
 
-  if (!effectiveChannel || effectiveChannel === "none" || !effectiveTo) {
-    return { status: "error", reason: "no-delivery-target" };
-  }
+  const hasDeliveryTarget = effectiveChannel && effectiveChannel !== "none" && effectiveTo;
 
   const { sender } = resolveHeartbeatSenderContext({ cfg, entry, delivery });
   const startedAt = opts.deps?.nowMs?.() ?? Date.now();
@@ -180,17 +178,22 @@ export async function runSessionInjectTurn(opts: {
 
   let replyText: string | undefined;
   const dispatcher = createReplyDispatcher({
-    deliver: async (payload) => {
-      await deliverOutboundPayloads({
-        cfg,
-        channel: effectiveChannel,
-        to: effectiveTo,
-        threadId: effectiveThreadId,
-        accountId: delivery.accountId,
-        payloads: [payload],
-        deps: opts.deps,
-      });
-    },
+    deliver: hasDeliveryTarget
+      ? async (payload) => {
+          await deliverOutboundPayloads({
+            cfg,
+            channel: effectiveChannel,
+            to: effectiveTo,
+            threadId: effectiveThreadId,
+            accountId: delivery.accountId,
+            payloads: [payload],
+            deps: opts.deps,
+          });
+        }
+      : async () => {
+          // Agent sessions have no external delivery target.
+          // The turn runs normally; response stays in session history.
+        },
   });
 
   await withReplyDispatcher({
