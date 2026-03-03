@@ -607,6 +607,7 @@ async function sendAnnounce(item: AnnounceQueueItem) {
     params: {
       sessionKey: item.sessionKey,
       message: item.prompt,
+      senderIsOwner: true,
       channel: requesterIsSubagent ? undefined : origin?.channel,
       accountId: requesterIsSubagent ? undefined : origin?.accountId,
       to: requesterIsSubagent ? undefined : origin?.to,
@@ -859,6 +860,7 @@ async function sendSubagentAnnounceDirectly(params: {
           params: {
             sessionKey: canonicalRequesterSessionKey,
             message: params.triggerMessage,
+            senderIsOwner: true,
             deliver: shouldDeliver,
             bestEffortDeliver: params.bestEffortDeliver,
             channel: shouldDeliver ? directChannel : undefined,

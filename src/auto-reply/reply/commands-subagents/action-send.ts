@@ -99,6 +99,7 @@ export async function handleSubagentsSendAction(
         message,
         sessionKey: targetResolution.entry.childSessionKey,
         sessionId: targetSessionId,
+        senderIsOwner: true,
         idempotencyKey,
         deliver: false,
         channel: INTERNAL_MESSAGE_CHANNEL,
