@@ -7,6 +7,7 @@ import {
 } from "../agents/agent-scope.js";
 import { appendCronStyleCurrentTimeLine } from "../agents/current-time.js";
 import { resolveEffectiveMessagesConfig } from "../agents/identity.js";
+import { resolveEmbeddedSessionLane } from "../agents/pi-embedded-runner/lanes.js";
 import { DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
 import { resolveHeartbeatReplyPayload } from "../auto-reply/heartbeat-reply-payload.js";
 import {
@@ -560,6 +561,35 @@ type HeartbeatPromptResolution = {
   hasCronEvents: boolean;
 };
 
+function parseChannelFromSessionKey(sessionKey: string): {
+  channel?: string;
+  to?: string;
+  threadId?: string;
+} {
+  const parts = sessionKey.split(":");
+  if (parts.length < 3 || parts[0] !== "agent") {
+    return {};
+  }
+  const channel = parts[2];
+  if (!channel || channel === "main") {
+    return {};
+  }
+
+  const kindIdx = parts.indexOf("group", 3);
+  const chanIdx = kindIdx < 0 ? parts.indexOf("channel", 3) : kindIdx;
+  let to: string | undefined;
+  if (chanIdx >= 0 && chanIdx + 1 < parts.length) {
+    const topicIdx = parts.indexOf("topic", chanIdx + 1);
+    const idParts = topicIdx > 0 ? parts.slice(chanIdx + 1, topicIdx) : parts.slice(chanIdx + 1);
+    const chatId = idParts.join(":");
+    to = `${channel}:${chatId}`;
+  }
+
+  const topicIdx = parts.indexOf("topic");
+  const threadId = topicIdx >= 0 && topicIdx + 1 < parts.length ? parts[topicIdx + 1] : undefined;
+  return { channel, to, threadId };
+}
+
 function resolveHeartbeatRunPrompt(params: {
   cfg: OpenClawConfig;
   heartbeat?: HeartbeatConfig;
@@ -567,9 +597,10 @@ function resolveHeartbeatRunPrompt(params: {
   canRelayToUser: boolean;
 }): HeartbeatPromptResolution {
   const pendingEventEntries = params.preflight.pendingEventEntries;
-  const pendingEvents = params.preflight.shouldInspectPendingEvents
-    ? pendingEventEntries.map((event) => event.text)
-    : [];
+  const pendingEvents =
+    params.preflight.shouldInspectPendingEvents || params.preflight.isWakeReason
+      ? pendingEventEntries.map((event) => event.text)
+      : [];
   const cronEvents = pendingEventEntries
     .filter(
       (event) =>
@@ -579,11 +610,14 @@ function resolveHeartbeatRunPrompt(params: {
     .map((event) => event.text);
   const hasExecCompletion = pendingEvents.some(isExecCompletionEvent);
   const hasCronEvents = cronEvents.length > 0;
-  const prompt = hasExecCompletion
-    ? buildExecEventPrompt({ deliverToUser: params.canRelayToUser })
-    : hasCronEvents
-      ? buildCronEventPrompt(cronEvents, { deliverToUser: params.canRelayToUser })
-      : resolveHeartbeatPrompt(params.cfg, params.heartbeat);
+  const hasWakeSystemEvents = params.preflight.isWakeReason && pendingEventEntries.length > 0;
+  const prompt = hasWakeSystemEvents
+    ? "Process pending system events."
+    : hasExecCompletion
+      ? buildExecEventPrompt({ deliverToUser: params.canRelayToUser })
+      : hasCronEvents
+        ? buildCronEventPrompt(cronEvents, { deliverToUser: params.canRelayToUser })
+        : resolveHeartbeatPrompt(params.cfg, params.heartbeat);
 
   return { prompt, hasExecCompletion, hasCronEvents };
 }
@@ -602,22 +636,7 @@ export async function runHeartbeatOnce(opts: {
   if (!heartbeatsEnabled) {
     return { status: "skipped", reason: "disabled" };
   }
-  if (!isHeartbeatEnabledForAgent(cfg, agentId)) {
-    return { status: "skipped", reason: "disabled" };
-  }
-  if (!resolveHeartbeatIntervalMs(cfg, undefined, heartbeat)) {
-    return { status: "skipped", reason: "disabled" };
-  }
-
   const startedAt = opts.deps?.nowMs?.() ?? Date.now();
-  if (!isWithinActiveHours(cfg, heartbeat, startedAt)) {
-    return { status: "skipped", reason: "quiet-hours" };
-  }
-
-  const queueSize = (opts.deps?.getQueueSize ?? getQueueSize)(CommandLane.Main);
-  if (queueSize > 0) {
-    return { status: "skipped", reason: "requests-in-flight" };
-  }
 
   // Preflight centralizes trigger classification, event inspection, and HEARTBEAT.md gating.
   const preflight = await resolveHeartbeatPreflight({
@@ -635,9 +654,49 @@ export async function runHeartbeatOnce(opts: {
     });
     return { status: "skipped", reason: preflight.skipReason };
   }
+  const hasForcedSessionKey = Boolean(opts.sessionKey?.trim());
+  const mainSessionKey = resolveAgentMainSessionKey({ cfg, agentId });
+  const isForcedNonMainSession =
+    hasForcedSessionKey && preflight.session.sessionKey !== mainSessionKey;
+  const hasPendingSystemEvents = preflight.pendingEventEntries.length > 0;
+  const shouldBypassHeartbeatFilters =
+    preflight.isWakeReason || (isForcedNonMainSession && hasPendingSystemEvents);
+
+  if (!shouldBypassHeartbeatFilters && !isHeartbeatEnabledForAgent(cfg, agentId)) {
+    return { status: "skipped", reason: "disabled" };
+  }
+  if (!shouldBypassHeartbeatFilters && !resolveHeartbeatIntervalMs(cfg, undefined, heartbeat)) {
+    return { status: "skipped", reason: "disabled" };
+  }
+  if (!shouldBypassHeartbeatFilters && !isWithinActiveHours(cfg, heartbeat, startedAt)) {
+    return { status: "skipped", reason: "quiet-hours" };
+  }
+
+  const queueLane = hasForcedSessionKey
+    ? resolveEmbeddedSessionLane(preflight.session.sessionKey)
+    : CommandLane.Main;
+  const queueSize = (opts.deps?.getQueueSize ?? getQueueSize)(queueLane);
+  if (queueSize > 0) {
+    return { status: "skipped", reason: "requests-in-flight" };
+  }
   const { entry, sessionKey, storePath } = preflight.session;
   const previousUpdatedAt = entry?.updatedAt;
-  const delivery = resolveHeartbeatDeliveryTarget({ cfg, entry, heartbeat });
+  let delivery = resolveHeartbeatDeliveryTarget({ cfg, entry, heartbeat });
+  if (delivery.channel === "none" || !delivery.to) {
+    const parsed = parseChannelFromSessionKey(sessionKey);
+    if (parsed.channel && parsed.to) {
+      delivery = {
+        ...delivery,
+        channel: parsed.channel,
+        to: parsed.to,
+        threadId:
+          delivery.threadId ??
+          parsed.threadId ??
+          entry?.lastThreadId ??
+          entry?.deliveryContext?.threadId,
+      };
+    }
+  }
   const heartbeatAccountId = heartbeat?.accountId?.trim();
   if (delivery.reason === "unknown-account") {
     log.warn("heartbeat: unknown accountId", {

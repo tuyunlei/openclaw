@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { getAcpSessionManager } from "../acp/control-plane/manager.js";
 import { resolveAcpAgentPolicyError, resolveAcpDispatchPolicyError } from "../acp/policy.js";
 import { toAcpRuntimeError } from "../acp/runtime/errors.js";
@@ -403,6 +404,7 @@ export async function agentCommand(
                       threadId: acpThreadProjectionTarget.threadId,
                       message: payload.text,
                       mediaUrl: payload.mediaUrl,
+                      idempotencyKey: crypto.randomUUID(),
                     },
                     timeoutMs: 10_000,
                   });

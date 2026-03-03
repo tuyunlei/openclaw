@@ -882,12 +882,7 @@ export async function wake(
 
   state.deps.enqueueSystemEvent(text, { sessionKey: opts.sessionKey });
   if (opts.mode === "now") {
-    if (opts.sessionKey && state.deps.runHeartbeatOnce) {
-      // Direct heartbeat run for targeted session
-      await state.deps.runHeartbeatOnce({ reason: "wake", sessionKey: opts.sessionKey });
-    } else {
-      state.deps.requestHeartbeatNow({ reason: "wake" });
-    }
+    state.deps.requestHeartbeatNow({ reason: "wake", sessionKey: opts.sessionKey });
   }
   return { ok: true } as const;
 }
