@@ -27,17 +27,17 @@ describe("ensureSkillsWatcher", () => {
 
     expect(opts.ignored).toBe(mod.DEFAULT_SKILLS_WATCH_IGNORED);
     const posix = (p: string) => p.replaceAll("\\", "/");
+    // New behaviour: concrete paths (no globs). Skills root dirs are always included
+    // so that newly-added skill subdirectories are detected.
     expect(targets).toEqual(
       expect.arrayContaining([
-        posix(path.join("/tmp/workspace", "skills", "SKILL.md")),
-        posix(path.join("/tmp/workspace", "skills", "*", "SKILL.md")),
-        posix(path.join("/tmp/workspace", ".agents", "skills", "SKILL.md")),
-        posix(path.join("/tmp/workspace", ".agents", "skills", "*", "SKILL.md")),
-        posix(path.join(os.homedir(), ".agents", "skills", "SKILL.md")),
-        posix(path.join(os.homedir(), ".agents", "skills", "*", "SKILL.md")),
+        posix(path.join("/tmp/workspace", "skills")),
+        posix(path.join("/tmp/workspace", ".agents", "skills")),
+        posix(path.join(os.homedir(), ".agents", "skills")),
       ]),
     );
-    expect(targets.every((target) => target.includes("SKILL.md"))).toBe(true);
+    // No glob wildcards in any target path
+    expect(targets.every((target) => !target.includes("*"))).toBe(true);
     const ignored = mod.DEFAULT_SKILLS_WATCH_IGNORED;
 
     // Node/JS paths

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
@@ -84,13 +85,28 @@ function toWatchGlobRoot(raw: string): string {
 function resolveWatchTargets(workspaceDir: string, config?: OpenClawConfig): string[] {
   // Skills are defined by SKILL.md; watch only those files to avoid traversing
   // or watching unrelated large trees (e.g. datasets) that can exhaust FDs.
+  //
+  // chokidar v5+ dropped glob pattern support. We enumerate skill directories
+  // using fs.readdirSync and watch concrete paths instead.
   const targets = new Set<string>();
   for (const root of resolveWatchPaths(workspaceDir, config)) {
-    const globRoot = toWatchGlobRoot(root);
-    // Some configs point directly at a skill folder.
-    targets.add(`${globRoot}/SKILL.md`);
-    // Standard layout: <skillsRoot>/<skillName>/SKILL.md
-    targets.add(`${globRoot}/*/SKILL.md`);
+    // Watch the skills root directory itself so we detect new skill subdirs.
+    targets.add(root);
+    // Enumerate existing skill subdirectories and watch each SKILL.md directly.
+    try {
+      const entries = fs.readdirSync(root, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          // Standard layout: <skillsRoot>/<skillName>/SKILL.md
+          targets.add(path.join(root, entry.name, "SKILL.md"));
+        } else if (entry.isFile() && entry.name === "SKILL.md") {
+          // Flat layout: skill defined directly in skills root
+          targets.add(path.join(root, "SKILL.md"));
+        }
+      }
+    } catch {
+      // Root directory doesn't exist yet — no skills to watch here.
+    }
   }
   return Array.from(targets).toSorted();
 }
@@ -129,7 +145,10 @@ export function getSkillsSnapshotVersion(workspaceDir?: string): number {
   return Math.max(globalVersion, local);
 }
 
-export function ensureSkillsWatcher(params: { workspaceDir: string; config?: OpenClawConfig }) {
+export async function ensureSkillsWatcher(params: {
+  workspaceDir: string;
+  config?: OpenClawConfig;
+}) {
   const workspaceDir = params.workspaceDir.trim();
   if (!workspaceDir) {
     return;
@@ -153,7 +172,11 @@ export function ensureSkillsWatcher(params: { workspaceDir: string; config?: Ope
     return;
   }
 
+  // resolveWatchTargets now returns concrete paths (chokidar v5+ doesn't support globs).
+  // It includes both existing SKILL.md files and the skills root directories (so that
+  // adding or removing a skill subdirectory is also detected).
   const watchTargets = resolveWatchTargets(workspaceDir, params.config);
+
   const pathsKey = watchTargets.join("|");
   if (existing && existing.pathsKey === pathsKey && existing.debounceMs === debounceMs) {
     return;
