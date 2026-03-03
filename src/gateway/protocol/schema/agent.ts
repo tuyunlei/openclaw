@@ -90,6 +90,24 @@ export const AgentParamsSchema = Type.Object(
         { additionalProperties: false },
       ),
     ),
+    acpThreadProjection: Type.Optional(
+      Type.Object(
+        {
+          enabled: Type.Boolean(),
+          target: Type.Object(
+            {
+              channel: NonEmptyString,
+              accountId: Type.Optional(Type.String()),
+              to: NonEmptyString,
+              threadId: Type.Optional(Type.String()),
+            },
+            { additionalProperties: false },
+          ),
+          includeToolSummaries: Type.Optional(Type.Boolean()),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     idempotencyKey: NonEmptyString,
     label: Type.Optional(SessionLabelString),
     spawnedBy: Type.Optional(Type.String()),

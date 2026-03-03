@@ -29,6 +29,16 @@ export type AgentRunContext = {
 
 export type AgentCommandOpts = {
   message: string;
+  acpThreadProjection?: {
+    enabled: boolean;
+    target: {
+      channel: string;
+      accountId?: string;
+      to: string;
+      threadId?: string;
+    };
+    includeToolSummaries?: boolean;
+  };
   /** Optional image attachments for multimodal messages. */
   images?: ImageContent[];
   /** Optional client-provided tools (OpenResponses hosted tools). */

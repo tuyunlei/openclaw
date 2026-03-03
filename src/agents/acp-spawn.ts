@@ -408,6 +408,19 @@ export async function spawnAcpDirect(
   const hasDeliveryTarget = Boolean(requesterOrigin?.channel && inferredDeliveryTo);
   const workflowMode = params.announceMode === "workflow";
   const shouldDeliverToUser = hasDeliveryTarget && !workflowMode;
+  const acpThreadProjection =
+    workflowMode && binding && boundThreadId
+      ? {
+          enabled: true,
+          target: {
+            channel: binding.conversation.channel,
+            accountId: binding.conversation.accountId,
+            to: `channel:${boundThreadId}`,
+            threadId: boundThreadId,
+          },
+          includeToolSummaries: true,
+        }
+      : undefined;
   const childIdem = crypto.randomUUID();
   let childRunId: string = childIdem;
   try {
@@ -421,6 +434,7 @@ export async function spawnAcpDirect(
         to: shouldDeliverToUser ? inferredDeliveryTo : undefined,
         accountId: shouldDeliverToUser ? (requesterOrigin?.accountId ?? undefined) : undefined,
         threadId: shouldDeliverToUser ? deliveryThreadId : undefined,
+        acpThreadProjection,
         idempotencyKey: childIdem,
         deliver: shouldDeliverToUser,
         label: params.label || undefined,

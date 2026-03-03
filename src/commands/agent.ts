@@ -32,6 +32,7 @@ import { getSkillsSnapshotVersion } from "../agents/skills/refresh.js";
 import { resolveAgentTimeoutMs } from "../agents/timeout.js";
 import { ensureAgentWorkspace } from "../agents/workspace.js";
 import { resolveOwnerNumbersForChannel } from "../auto-reply/command-auth.js";
+import { createAcpReplyProjector } from "../auto-reply/reply/acp-projector.js";
 import {
   formatThinkingLevels,
   formatXHighModelHint,
@@ -55,6 +56,7 @@ import {
   type SessionEntry,
   updateSessionStore,
 } from "../config/sessions.js";
+import { callGateway } from "../gateway/call.js";
 import {
   clearAgentRunContext,
   emitAgentEvent,
@@ -376,6 +378,41 @@ export async function agentCommand(
 
       let streamedText = "";
       let stopReason: string | undefined;
+      const acpThreadProjectionTarget =
+        opts.acpThreadProjection?.enabled === true ? opts.acpThreadProjection.target : undefined;
+      const acpProjector =
+        acpThreadProjectionTarget &&
+        acpThreadProjectionTarget.channel?.trim() &&
+        acpThreadProjectionTarget.to?.trim()
+          ? createAcpReplyProjector({
+              cfg,
+              shouldSendToolSummaries: opts.acpThreadProjection?.includeToolSummaries !== false,
+              provider: acpThreadProjectionTarget.channel,
+              accountId: acpThreadProjectionTarget.accountId,
+              deliver: async (_kind, payload) => {
+                if (!payload.text && !payload.mediaUrl) {
+                  return false;
+                }
+                try {
+                  await callGateway({
+                    method: "send",
+                    params: {
+                      channel: acpThreadProjectionTarget.channel,
+                      to: acpThreadProjectionTarget.to,
+                      accountId: acpThreadProjectionTarget.accountId,
+                      threadId: acpThreadProjectionTarget.threadId,
+                      message: payload.text,
+                      mediaUrl: payload.mediaUrl,
+                    },
+                    timeoutMs: 10_000,
+                  });
+                  return true;
+                } catch {
+                  return false;
+                }
+              },
+            })
+          : null;
       try {
         const dispatchPolicyError = resolveAcpDispatchPolicyError(cfg);
         if (dispatchPolicyError) {
@@ -396,29 +433,25 @@ export async function agentCommand(
           mode: "prompt",
           requestId: runId,
           signal: opts.abortSignal,
-          onEvent: (event) => {
+          onEvent: async (event) => {
             if (event.type === "done") {
               stopReason = event.stopReason;
-              return;
+            } else if (event.type === "text_delta") {
+              if ((!event.stream || event.stream === "output") && event.text) {
+                streamedText += event.text;
+                emitAgentEvent({
+                  runId,
+                  stream: "assistant",
+                  data: {
+                    text: streamedText,
+                    delta: event.text,
+                  },
+                });
+              }
             }
-            if (event.type !== "text_delta") {
-              return;
+            if (acpProjector) {
+              await acpProjector.onEvent(event);
             }
-            if (event.stream && event.stream !== "output") {
-              return;
-            }
-            if (!event.text) {
-              return;
-            }
-            streamedText += event.text;
-            emitAgentEvent({
-              runId,
-              stream: "assistant",
-              data: {
-                text: streamedText,
-                delta: event.text,
-              },
-            });
           },
         });
       } catch (error) {
@@ -437,6 +470,8 @@ export async function agentCommand(
           },
         });
         throw acpError;
+      } finally {
+        await acpProjector?.flush(true);
       }
 
       emitAgentEvent({

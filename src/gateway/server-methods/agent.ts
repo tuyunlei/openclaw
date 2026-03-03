@@ -625,6 +625,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         extraSystemPrompt: request.extraSystemPrompt,
         inputProvenance,
         senderIsOwner: request.senderIsOwner === true,
+        acpThreadProjection: request.acpThreadProjection,
       },
       defaultRuntime,
       context.deps,
