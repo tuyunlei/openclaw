@@ -1,4 +1,10 @@
 import { acpOutputCache } from "../acp/control-plane/manager.core.js";
+import {
+  buildGroupChatContext,
+  buildGroupIntro,
+  defaultGroupActivation,
+  resolveGroupRequireMention,
+} from "../auto-reply/reply/groups.js";
 import { resolveQueueSettings } from "../auto-reply/reply/queue.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH } from "../config/agent-limits.js";
@@ -602,12 +608,18 @@ async function sendAnnounce(item: AnnounceQueueItem) {
       enqueuedAt: item.enqueuedAt,
     }),
   );
+  const { entry } = loadRequesterSessionEntry(item.sessionKey);
+  const extraSystemPrompt = buildAnnounceExtraSystemPrompt({ cfg, entry, origin: item.origin });
   await callGateway({
     method: "agent",
     params: {
       sessionKey: item.sessionKey,
       message: item.prompt,
       senderIsOwner: true,
+      extraSystemPrompt,
+      groupId: entry?.groupId,
+      groupChannel: entry?.groupChannel ?? entry?.subject,
+      groupSpace: entry?.space,
       channel: requesterIsSubagent ? undefined : origin?.channel,
       accountId: requesterIsSubagent ? undefined : origin?.accountId,
       to: requesterIsSubagent ? undefined : origin?.to,
@@ -649,6 +661,53 @@ function loadRequesterSessionEntry(requesterSessionKey: string) {
   const store = loadSessionStore(storePath);
   const entry = store[canonicalKey];
   return { cfg, entry, canonicalKey };
+}
+
+function buildAnnounceExtraSystemPrompt(params: {
+  cfg: ReturnType<typeof loadConfig>;
+  entry?: ReturnType<typeof loadRequesterSessionEntry>["entry"];
+  origin?: DeliveryContext;
+}): string | undefined {
+  const entry = params.entry;
+  if (!entry || (entry.chatType !== "group" && entry.chatType !== "channel")) {
+    return undefined;
+  }
+  const provider =
+    entry.channel?.trim() || entry.lastChannel?.trim() || params.origin?.channel?.trim();
+  const rawFrom =
+    entry.groupId && provider
+      ? `${provider}:${entry.chatType === "channel" ? "channel" : "group"}:${entry.groupId}`
+      : entry.lastTo && provider && !entry.lastTo.includes(":")
+        ? `${provider}:${entry.lastTo}`
+        : entry.lastTo;
+  const sessionCtx = {
+    ChatType: entry.chatType,
+    Provider: provider,
+    From: rawFrom,
+    AccountId: entry.lastAccountId,
+    GroupSubject: entry.subject,
+    GroupMembers: entry.groupMembers,
+    GroupSystemPrompt: entry.groupSystemPrompt,
+    GroupChannel: entry.groupChannel,
+    GroupSpace: entry.space,
+  };
+  const defaultActivation = defaultGroupActivation(
+    resolveGroupRequireMention({ cfg: params.cfg, ctx: sessionCtx }),
+  );
+  const extra = [
+    buildGroupChatContext({ sessionCtx }),
+    buildGroupIntro({
+      cfg: params.cfg,
+      sessionCtx,
+      sessionEntry: entry,
+      defaultActivation,
+      silentToken: SILENT_REPLY_TOKEN,
+    }),
+    sessionCtx.GroupSystemPrompt?.trim() ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  return extra || undefined;
 }
 
 function buildAnnounceQueueKey(sessionKey: string, origin?: DeliveryContext): string {
@@ -746,6 +805,12 @@ async function sendSubagentAnnounceDirectly(params: {
     cfg,
     params.targetRequesterSessionKey,
   );
+  const { entry } = loadRequesterSessionEntry(canonicalRequesterSessionKey);
+  const extraSystemPrompt = buildAnnounceExtraSystemPrompt({
+    cfg,
+    entry,
+    origin: params.directOrigin,
+  });
   try {
     const completionDirectOrigin = normalizeDeliveryContext(params.completionDirectOrigin);
     const completionChannelRaw =
@@ -861,6 +926,10 @@ async function sendSubagentAnnounceDirectly(params: {
             sessionKey: canonicalRequesterSessionKey,
             message: params.triggerMessage,
             senderIsOwner: true,
+            extraSystemPrompt,
+            groupId: entry?.groupId,
+            groupChannel: entry?.groupChannel ?? entry?.subject,
+            groupSpace: entry?.space,
             deliver: shouldDeliver,
             bestEffortDeliver: params.bestEffortDeliver,
             channel: shouldDeliver ? directChannel : undefined,
