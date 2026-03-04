@@ -828,10 +828,14 @@ async function sendSubagentAnnounceDirectly(params: {
     params.targetRequesterSessionKey,
   );
   const { entry } = loadRequesterSessionEntry(canonicalRequesterSessionKey);
+  const directOriginForAnnounce =
+    isWorkflowMode && !params.requesterIsSubagent
+      ? (params.completionDirectOrigin ?? params.directOrigin)
+      : params.directOrigin;
   const extraSystemPrompt = buildAnnounceExtraSystemPrompt({
     cfg,
     entry,
-    origin: params.directOrigin,
+    origin: directOriginForAnnounce,
   });
   try {
     const completionDirectOrigin = normalizeDeliveryContext(params.completionDirectOrigin);
@@ -924,7 +928,10 @@ async function sendSubagentAnnounceDirectly(params: {
       }
     }
 
-    const directOrigin = normalizeDeliveryContext(params.directOrigin);
+    const directOrigin =
+      isWorkflowMode && !params.requesterIsSubagent
+        ? normalizeDeliveryContext(params.completionDirectOrigin ?? params.directOrigin)
+        : normalizeDeliveryContext(params.directOrigin);
     const directChannelRaw =
       typeof directOrigin?.channel === "string" ? directOrigin.channel.trim() : "";
     const directChannel =

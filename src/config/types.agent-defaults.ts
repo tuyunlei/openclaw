@@ -285,6 +285,11 @@ export type AgentDefaultsConfig = {
     runTimeoutSeconds?: number;
     /** Gateway timeout in ms for sub-agent announce delivery calls (default: 60000). */
     announceTimeoutMs?: number;
+    /** Thread projection controls for sub-agent workflow mode. */
+    threadProjection?: {
+      /** Stream live assistant/tool events into the bound thread. Default: false. */
+      live?: boolean;
+    };
   };
   /** Optional sandbox settings for non-main sessions. */
   sandbox?: AgentSandboxConfig;

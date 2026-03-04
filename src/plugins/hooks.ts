@@ -159,6 +159,7 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     return {
       status: "ok",
       threadBindingReady: Boolean(acc?.threadBindingReady || next.threadBindingReady),
+      threadProjectionTarget: acc?.threadProjectionTarget ?? next.threadProjectionTarget,
     };
   };
 
