@@ -27,18 +27,20 @@ export type AgentRunContext = {
   hasRepliedRef?: { value: boolean };
 };
 
+export type AcpThreadProjectionConfig = {
+  enabled: boolean;
+  target: {
+    channel: string;
+    accountId?: string;
+    to: string;
+    threadId?: string;
+  };
+  includeToolSummaries?: boolean;
+};
+
 export type AgentCommandOpts = {
   message: string;
-  acpThreadProjection?: {
-    enabled: boolean;
-    target: {
-      channel: string;
-      accountId?: string;
-      to: string;
-      threadId?: string;
-    };
-    includeToolSummaries?: boolean;
-  };
+  acpThreadProjection?: AcpThreadProjectionConfig;
   /** Optional image attachments for multimodal messages. */
   images?: ImageContent[];
   /** Optional client-provided tools (OpenResponses hosted tools). */

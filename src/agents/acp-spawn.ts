@@ -421,6 +421,7 @@ export async function spawnAcpDirect(
           includeToolSummaries: true,
         }
       : undefined;
+  acpManager.setThreadProjection(sessionKey, acpThreadProjection);
   const childIdem = crypto.randomUUID();
   let childRunId: string = childIdem;
   try {

@@ -64,6 +64,7 @@ vi.mock("../acp/control-plane/manager.js", () => {
     getAcpSessionManager: () => ({
       initializeSession: (params: unknown) => hoisted.initializeSessionMock(params),
       closeSession: (params: unknown) => hoisted.closeSessionMock(params),
+      setThreadProjection: () => {},
     }),
   };
 });
