@@ -720,7 +720,6 @@ export async function spawnSubagentDirect(
         groupId: ctx.agentGroupId ?? undefined,
         groupChannel: ctx.agentGroupChannel ?? undefined,
         groupSpace: ctx.agentGroupSpace ?? undefined,
-        senderIsOwner: true,
       },
       timeoutMs: 10_000,
     });

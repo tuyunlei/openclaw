@@ -646,7 +646,6 @@ export function createSubagentsTool(opts?: { agentSessionKey?: string }): AnyAge
               message,
               sessionKey: resolved.entry.childSessionKey,
               sessionId,
-              senderIsOwner: true,
               idempotencyKey,
               deliver: false,
               channel: INTERNAL_MESSAGE_CHANNEL,

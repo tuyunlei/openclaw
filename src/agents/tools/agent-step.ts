@@ -58,7 +58,6 @@ export async function runAgentStep(params: {
         sourceChannel: params.sourceChannel,
         sourceTool: params.sourceTool ?? "sessions_send",
       },
-      senderIsOwner: true,
     },
     timeoutMs: 10_000,
   });

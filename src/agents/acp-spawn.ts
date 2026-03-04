@@ -455,7 +455,6 @@ export async function spawnAcpDirect(
       params: {
         message: params.task,
         sessionKey,
-        senderIsOwner: true,
         channel: shouldDeliverToUser ? requesterOrigin?.channel : undefined,
         to: shouldDeliverToUser ? inferredDeliveryTo : undefined,
         accountId: shouldDeliverToUser ? (requesterOrigin?.accountId ?? undefined) : undefined,

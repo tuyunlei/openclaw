@@ -231,7 +231,6 @@ export function createSessionsSendTool(opts?: {
           sourceChannel: opts?.agentChannel,
           sourceTool: "sessions_send",
         },
-        senderIsOwner: true,
       };
       const requesterSessionKey = opts?.agentSessionKey;
       const requesterChannel = opts?.agentChannel;

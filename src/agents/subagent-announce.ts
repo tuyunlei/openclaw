@@ -632,7 +632,6 @@ async function sendAnnounce(item: AnnounceQueueItem) {
     params: {
       sessionKey: item.sessionKey,
       message: item.prompt,
-      senderIsOwner: true,
       extraSystemPrompt,
       groupId: entry?.groupId,
       groupChannel: entry?.groupChannel ?? entry?.subject,
@@ -959,7 +958,6 @@ async function sendSubagentAnnounceDirectly(params: {
           params: {
             sessionKey: canonicalRequesterSessionKey,
             message: params.triggerMessage,
-            senderIsOwner: true,
             extraSystemPrompt,
             groupId: entry?.groupId,
             groupChannel: entry?.groupChannel ?? entry?.subject,
