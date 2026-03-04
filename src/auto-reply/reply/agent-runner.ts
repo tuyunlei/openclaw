@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import { lookupContextTokens } from "../../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
+import { resolveModelAuthMode } from "../../agents/model-auth.js";
 import { isCliProvider } from "../../agents/model-selection.js";
 import { queueEmbeddedPiMessage } from "../../agents/pi-embedded.js";
-import { hasNonzeroUsage, normalizeUsage } from "../../agents/usage.js";
+import { hasNonzeroUsage } from "../../agents/usage.js";
 import {
   resolveAgentIdFromSessionKey,
   resolveSessionFilePath,
@@ -18,7 +19,6 @@ import { emitAgentEvent } from "../../infra/agent-events.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
 import { generateSecureUuid } from "../../infra/secure-random.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
-import { diagnosticLogger as diag } from "../../logging/diagnostic.js";
 import { defaultRuntime } from "../../runtime.js";
 import { estimateUsageCost, resolveModelCostConfig } from "../../utils/usage-format.js";
 import {
@@ -39,6 +39,11 @@ import {
 } from "./agent-runner-helpers.js";
 import { runMemoryFlushIfNeeded } from "./agent-runner-memory.js";
 import { buildReplyPayloads } from "./agent-runner-payloads.js";
+import {
+  appendUnscheduledReminderNote,
+  hasSessionRelatedCronJobs,
+  hasUnbackedReminderCommitment,
+} from "./agent-runner-reminder-guard.js";
 import { appendUsageLine, formatResponseUsageLine } from "./agent-runner-utils.js";
 import { createAudioAsVoiceBuffer, createBlockReplyPipeline } from "./block-reply-pipeline.js";
 import { resolveEffectiveBlockStreamingConfig } from "./block-streaming.js";
@@ -53,41 +58,6 @@ import { createTypingSignaler } from "./typing-mode.js";
 import type { TypingController } from "./typing.js";
 
 const BLOCK_REPLY_SEND_TIMEOUT_MS = 15_000;
-const UNSCHEDULED_REMINDER_NOTE =
-  "Note: I did not schedule a reminder in this turn, so this will not trigger automatically.";
-const REMINDER_COMMITMENT_PATTERNS: RegExp[] = [
-  /\b(?:i\s*['’]?ll|i will)\s+(?:make sure to\s+)?(?:remember|remind|ping|follow up|follow-up|check back|circle back)\b/i,
-  /\b(?:i\s*['’]?ll|i will)\s+(?:set|create|schedule)\s+(?:a\s+)?reminder\b/i,
-];
-
-function hasUnbackedReminderCommitment(text: string): boolean {
-  const normalized = text.toLowerCase();
-  if (!normalized.trim()) {
-    return false;
-  }
-  if (normalized.includes(UNSCHEDULED_REMINDER_NOTE.toLowerCase())) {
-    return false;
-  }
-  return REMINDER_COMMITMENT_PATTERNS.some((pattern) => pattern.test(text));
-}
-
-function appendUnscheduledReminderNote(payloads: ReplyPayload[]): ReplyPayload[] {
-  let appended = false;
-  return payloads.map((payload) => {
-    if (appended || payload.isError || typeof payload.text !== "string") {
-      return payload;
-    }
-    if (!hasUnbackedReminderCommitment(payload.text)) {
-      return payload;
-    }
-    appended = true;
-    const trimmed = payload.text.trimEnd();
-    return {
-      ...payload,
-      text: `${trimmed}\n\n${UNSCHEDULED_REMINDER_NOTE}`,
-    };
-  });
-}
 
 export async function runReplyAgent(params: {
   commandBody: string;
@@ -128,7 +98,7 @@ export async function runReplyAgent(params: {
     shouldSteer,
     shouldFollowup,
     isActive,
-    isStreaming: _isStreaming,
+    isStreaming,
     opts,
     typing,
     sessionEntry,
@@ -218,12 +188,8 @@ export async function runReplyAgent(params: {
     }
   };
 
-  // [FIX] Removed isStreaming check - steer should work whenever there's an active run,
-  // not just when LLM is streaming. pi-agent-core's steer() delivers messages after
-  // current tool execution completes.
-  if (shouldSteer) {
+  if (shouldSteer && isStreaming) {
     const steered = queueEmbeddedPiMessage(followupRun.run.sessionId, followupRun.prompt);
-    diag.debug(`steer: attempt result=${steered} sessionId=${followupRun.run.sessionId}`);
     if (steered && !shouldFollowup) {
       await touchActiveSessionEntry();
       typing.cleanup();
@@ -533,7 +499,33 @@ export async function runReplyAgent(params: {
     const { replyPayloads } = payloadResult;
     didLogHeartbeatStrip = payloadResult.didLogHeartbeatStrip;
 
-    // Emit diagnostics regardless of whether payloads were already streamed.
+    if (replyPayloads.length === 0) {
+      return finalizeWithFollowup(undefined, queueKey, runFollowupTurn);
+    }
+
+    const successfulCronAdds = runResult.successfulCronAdds ?? 0;
+    const hasReminderCommitment = replyPayloads.some(
+      (payload) =>
+        !payload.isError &&
+        typeof payload.text === "string" &&
+        hasUnbackedReminderCommitment(payload.text),
+    );
+    // Suppress the guard note when an existing cron job (created in a prior
+    // turn) already covers the commitment — avoids false positives (#32228).
+    const coveredByExistingCron =
+      hasReminderCommitment && successfulCronAdds === 0
+        ? await hasSessionRelatedCronJobs({
+            cronStorePath: cfg.cron?.store,
+            sessionKey,
+          })
+        : false;
+    const guardedReplyPayloads =
+      hasReminderCommitment && successfulCronAdds === 0 && !coveredByExistingCron
+        ? appendUnscheduledReminderNote(replyPayloads)
+        : replyPayloads;
+
+    await signalTypingIfNeeded(guardedReplyPayloads, typingSignals);
+
     if (isDiagnosticsEnabled(cfg) && hasNonzeroUsage(usage)) {
       const input = usage.input ?? 0;
       const output = usage.output ?? 0;
@@ -572,64 +564,32 @@ export async function runReplyAgent(params: {
       });
     }
 
-    // Compute usage line before the early-return so block-streaming runs still
-    // get a trailing usage footer even though the main payloads were already sent.
     const responseUsageRaw =
       activeSessionEntry?.responseUsage ??
-      (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined) ??
-      cfg.agents?.defaults?.responseUsage;
+      (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined);
     const responseUsageMode = resolveResponseUsageMode(responseUsageRaw);
     if (responseUsageMode !== "off" && hasNonzeroUsage(usage)) {
-      // Always attempt to show cost; formatResponseUsageLine handles missing cost data gracefully.
-      const showCost = true;
-      const costConfig = resolveModelCostConfig({
-        provider: providerUsed,
-        model: modelUsed,
-        config: cfg,
-      });
-      const lastCallUsage = runResult.meta?.agentMeta?.lastCallUsage
-        ? normalizeUsage(runResult.meta.agentMeta.lastCallUsage)
+      const authMode = resolveModelAuthMode(providerUsed, cfg);
+      const showCost = authMode === "api-key";
+      const costConfig = showCost
+        ? resolveModelCostConfig({
+            provider: providerUsed,
+            model: modelUsed,
+            config: cfg,
+          })
         : undefined;
-      const ctxUsage = lastCallUsage ?? usage;
-      const totalTokens =
-        (ctxUsage?.input ?? 0) + (ctxUsage?.cacheRead ?? 0) + (ctxUsage?.cacheWrite ?? 0);
       let formatted = formatResponseUsageLine({
         usage,
-        lastCallUsage,
         showCost,
         costConfig,
-        contextTokens: totalTokens > 0 ? contextTokensUsed : undefined,
       });
       if (formatted && responseUsageMode === "full" && sessionKey) {
-        formatted = `${formatted} · session ${sessionKey}`;
+        formatted = `${formatted} · session \`${sessionKey}\``;
       }
       if (formatted) {
         responseUsageLine = formatted;
       }
     }
-
-    if (replyPayloads.length === 0) {
-      // Block-streaming already delivered the main content.  Send the usage
-      // line as a tail payload so the user still sees token counts.
-      if (responseUsageLine) {
-        return finalizeWithFollowup({ text: responseUsageLine }, queueKey, runFollowupTurn);
-      }
-      return finalizeWithFollowup(undefined, queueKey, runFollowupTurn);
-    }
-
-    const successfulCronAdds = runResult.successfulCronAdds ?? 0;
-    const hasReminderCommitment = replyPayloads.some(
-      (payload) =>
-        !payload.isError &&
-        typeof payload.text === "string" &&
-        hasUnbackedReminderCommitment(payload.text),
-    );
-    const guardedReplyPayloads =
-      hasReminderCommitment && successfulCronAdds === 0
-        ? appendUnscheduledReminderNote(replyPayloads)
-        : replyPayloads;
-
-    await signalTypingIfNeeded(guardedReplyPayloads, typingSignals);
 
     // If verbose is enabled, prepend operational run notices.
     let finalPayloads = guardedReplyPayloads;
@@ -706,7 +666,7 @@ export async function runReplyAgent(params: {
       // Inject post-compaction workspace context for the next agent turn
       if (sessionKey) {
         const workspaceDir = process.cwd();
-        readPostCompactionContext(workspaceDir)
+        readPostCompactionContext(workspaceDir, cfg)
           .then((contextContent) => {
             if (contextContent) {
               enqueueSystemEvent(contextContent, { sessionKey });
@@ -734,6 +694,11 @@ export async function runReplyAgent(params: {
       queueKey,
       runFollowupTurn,
     );
+  } catch (error) {
+    // Keep the followup queue moving even when an unexpected exception escapes
+    // the run path; the caller still receives the original error.
+    finalizeWithFollowup(undefined, queueKey, runFollowupTurn);
+    throw error;
   } finally {
     blockReplyPipeline?.stop();
     typing.markRunComplete();
