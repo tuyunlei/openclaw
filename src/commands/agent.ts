@@ -415,6 +415,17 @@ export async function agentCommand(
               },
             })
           : null;
+      // Send task prompt to thread before starting the ACP turn
+      if (acpProjector && body) {
+        const MAX_TASK_PREVIEW = 1900;
+        const taskPreview =
+          body.length > MAX_TASK_PREVIEW ? body.slice(0, MAX_TASK_PREVIEW) + "…" : body;
+        void acpProjector.onEvent({
+          type: "status" as const,
+          text: `📋 Task:\n${taskPreview}`,
+        });
+      }
+
       try {
         const dispatchPolicyError = resolveAcpDispatchPolicyError(cfg);
         if (dispatchPolicyError) {
@@ -452,7 +463,7 @@ export async function agentCommand(
               }
             }
             if (acpProjector) {
-              await acpProjector.onEvent(event);
+              void acpProjector.onEvent(event);
             }
           },
         });
