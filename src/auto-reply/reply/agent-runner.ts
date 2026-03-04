@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import { lookupContextTokens } from "../../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
-import { resolveModelAuthMode } from "../../agents/model-auth.js";
 import { isCliProvider } from "../../agents/model-selection.js";
 import { queueEmbeddedPiMessage } from "../../agents/pi-embedded.js";
 import { hasNonzeroUsage } from "../../agents/usage.js";
@@ -499,33 +498,7 @@ export async function runReplyAgent(params: {
     const { replyPayloads } = payloadResult;
     didLogHeartbeatStrip = payloadResult.didLogHeartbeatStrip;
 
-    if (replyPayloads.length === 0) {
-      return finalizeWithFollowup(undefined, queueKey, runFollowupTurn);
-    }
-
-    const successfulCronAdds = runResult.successfulCronAdds ?? 0;
-    const hasReminderCommitment = replyPayloads.some(
-      (payload) =>
-        !payload.isError &&
-        typeof payload.text === "string" &&
-        hasUnbackedReminderCommitment(payload.text),
-    );
-    // Suppress the guard note when an existing cron job (created in a prior
-    // turn) already covers the commitment — avoids false positives (#32228).
-    const coveredByExistingCron =
-      hasReminderCommitment && successfulCronAdds === 0
-        ? await hasSessionRelatedCronJobs({
-            cronStorePath: cfg.cron?.store,
-            sessionKey,
-          })
-        : false;
-    const guardedReplyPayloads =
-      hasReminderCommitment && successfulCronAdds === 0 && !coveredByExistingCron
-        ? appendUnscheduledReminderNote(replyPayloads)
-        : replyPayloads;
-
-    await signalTypingIfNeeded(guardedReplyPayloads, typingSignals);
-
+    // Emit diagnostics regardless of whether payloads were already streamed.
     if (isDiagnosticsEnabled(cfg) && hasNonzeroUsage(usage)) {
       const input = usage.input ?? 0;
       const output = usage.output ?? 0;
@@ -564,20 +537,20 @@ export async function runReplyAgent(params: {
       });
     }
 
+    // Compute usage line before the early-return so block-streaming runs still
+    // get a trailing usage footer even though the main payloads were already sent.
     const responseUsageRaw =
       activeSessionEntry?.responseUsage ??
       (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined);
     const responseUsageMode = resolveResponseUsageMode(responseUsageRaw);
     if (responseUsageMode !== "off" && hasNonzeroUsage(usage)) {
-      const authMode = resolveModelAuthMode(providerUsed, cfg);
-      const showCost = authMode === "api-key";
-      const costConfig = showCost
-        ? resolveModelCostConfig({
-            provider: providerUsed,
-            model: modelUsed,
-            config: cfg,
-          })
-        : undefined;
+      // Always attempt to show cost; formatResponseUsageLine handles missing cost data gracefully.
+      const showCost = true;
+      const costConfig = resolveModelCostConfig({
+        provider: providerUsed,
+        model: modelUsed,
+        config: cfg,
+      });
       let formatted = formatResponseUsageLine({
         usage,
         showCost,
@@ -590,6 +563,38 @@ export async function runReplyAgent(params: {
         responseUsageLine = formatted;
       }
     }
+
+    if (replyPayloads.length === 0) {
+      // Block-streaming already delivered the main content.  Send the usage
+      // line as a tail payload so the user still sees token counts.
+      if (responseUsageLine) {
+        return finalizeWithFollowup({ text: responseUsageLine }, queueKey, runFollowupTurn);
+      }
+      return finalizeWithFollowup(undefined, queueKey, runFollowupTurn);
+    }
+
+    const successfulCronAdds = runResult.successfulCronAdds ?? 0;
+    const hasReminderCommitment = replyPayloads.some(
+      (payload) =>
+        !payload.isError &&
+        typeof payload.text === "string" &&
+        hasUnbackedReminderCommitment(payload.text),
+    );
+    // Suppress the guard note when an existing cron job (created in a prior
+    // turn) already covers the commitment — avoids false positives (#32228).
+    const coveredByExistingCron =
+      hasReminderCommitment && successfulCronAdds === 0
+        ? await hasSessionRelatedCronJobs({
+            cronStorePath: cfg.cron?.store,
+            sessionKey,
+          })
+        : false;
+    const guardedReplyPayloads =
+      hasReminderCommitment && successfulCronAdds === 0 && !coveredByExistingCron
+        ? appendUnscheduledReminderNote(replyPayloads)
+        : replyPayloads;
+
+    await signalTypingIfNeeded(guardedReplyPayloads, typingSignals);
 
     // If verbose is enabled, prepend operational run notices.
     let finalPayloads = guardedReplyPayloads;
