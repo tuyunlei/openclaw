@@ -379,15 +379,17 @@ export async function agentCommand(
 
       let streamedText = "";
       let stopReason: string | undefined;
+      const acpThreadProjectionConfig =
+        opts.acpThreadProjection ?? acpManager.getThreadProjection(sessionKey);
       const acpThreadProjectionTarget =
-        opts.acpThreadProjection?.enabled === true ? opts.acpThreadProjection.target : undefined;
+        acpThreadProjectionConfig?.enabled === true ? acpThreadProjectionConfig.target : undefined;
       const acpProjector =
         acpThreadProjectionTarget &&
         acpThreadProjectionTarget.channel?.trim() &&
         acpThreadProjectionTarget.to?.trim()
           ? createAcpReplyProjector({
               cfg,
-              shouldSendToolSummaries: opts.acpThreadProjection?.includeToolSummaries !== false,
+              shouldSendToolSummaries: acpThreadProjectionConfig?.includeToolSummaries !== false,
               provider: acpThreadProjectionTarget.channel,
               accountId: acpThreadProjectionTarget.accountId,
               deliver: async (_kind, payload) => {

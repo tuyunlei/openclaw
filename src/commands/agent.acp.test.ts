@@ -126,6 +126,7 @@ function mockAcpManager(params: {
       ((input) => {
         return resolveReadySession(input.sessionKey);
       }),
+    getThreadProjection: () => undefined,
   } as unknown as ReturnType<typeof acpManagerModule.getAcpSessionManager>);
 }
 
