@@ -206,6 +206,16 @@ export const agentHandlers: GatewayRequestHandlers = {
       spawnedBy?: string;
       inputProvenance?: InputProvenance;
       senderIsOwner?: boolean;
+      acpThreadProjection?: {
+        enabled: boolean;
+        target: {
+          channel: string;
+          accountId?: string;
+          to: string;
+          threadId?: string;
+        };
+        includeToolSummaries?: boolean;
+      };
     };
     const senderIsOwner = resolveSenderIsOwnerFromClient(client);
     const cfg = loadConfig();
