@@ -853,7 +853,6 @@ async function sendSubagentAnnounceDirectly(params: {
       !params.requesterIsSubagent && Boolean(completionChannel) && Boolean(completionTo);
 
     if (
-      !isWorkflowMode &&
       params.expectsCompletionMessage &&
       hasCompletionDirectTarget &&
       params.completionMessage?.trim()
@@ -928,10 +927,11 @@ async function sendSubagentAnnounceDirectly(params: {
       }
     }
 
-    const directOrigin =
-      isWorkflowMode && !params.requesterIsSubagent
-        ? normalizeDeliveryContext(params.completionDirectOrigin ?? params.directOrigin)
-        : normalizeDeliveryContext(params.directOrigin);
+    // Always use the original requester origin for the inject turn delivery target.
+    // completionDirectOrigin (thread) is only for the direct P0-B send above;
+    // using it here would route the main agent's inject turn to the thread and
+    // pollute lastThreadId for subsequent turns.
+    const directOrigin = normalizeDeliveryContext(params.directOrigin);
     const directChannelRaw =
       typeof directOrigin?.channel === "string" ? directOrigin.channel.trim() : "";
     const directChannel =

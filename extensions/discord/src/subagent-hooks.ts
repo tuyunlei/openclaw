@@ -81,7 +81,16 @@ export function registerDiscordSubagentHooks(api: OpenClawPluginApi) {
             "Unable to create or bind a Discord thread for this subagent session. Session mode is unavailable for this target.",
         };
       }
-      return { status: "ok" as const, threadBindingReady: true };
+      return {
+        status: "ok" as const,
+        threadBindingReady: true,
+        threadProjectionTarget: {
+          channel: "discord",
+          accountId: binding.accountId,
+          to: `channel:${binding.threadId}`,
+          threadId: binding.threadId,
+        },
+      };
     } catch (err) {
       return {
         status: "error" as const,
