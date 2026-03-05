@@ -155,8 +155,11 @@ function schedule(coalesceMs: number, kind: WakeTimerKind = "normal") {
         const res = await active(wakeOpts);
         if (res.status === "skipped" && res.reason === "requests-in-flight") {
           // The main lane is busy; retry this wake target soon.
+          // Preserve the original reason so bypass filters (e.g. wake) still
+          // apply on retry — using "retry" would lose the wake identity and
+          // cause heartbeat filters to reject the retried attempt.
           queuePendingWakeReason({
-            reason: pendingWake.reason ?? "retry",
+            reason: pendingWake.reason,
             agentId: pendingWake.agentId,
             sessionKey: pendingWake.sessionKey,
           });
@@ -167,7 +170,7 @@ function schedule(coalesceMs: number, kind: WakeTimerKind = "normal") {
       // Error is already logged by the heartbeat runner; schedule a retry.
       for (const pendingWake of pendingBatch) {
         queuePendingWakeReason({
-          reason: pendingWake.reason ?? "retry",
+          reason: pendingWake.reason,
           agentId: pendingWake.agentId,
           sessionKey: pendingWake.sessionKey,
         });
