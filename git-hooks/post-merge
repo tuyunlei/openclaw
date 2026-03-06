@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Post-merge hook: remind agent to update XTU-CHANGES.md after merges into xtu/main.
+# Fires for both fast-forward and non-fast-forward merges. Cannot block (post-hook).
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+[[ "$BRANCH" == "xtu/main" ]] || exit 0
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+CHANGELOG="$ROOT_DIR/../XTU-CHANGES.md"
+DATE=$(date +%m-%d)
+
+MISSING=""
+while IFS= read -r line; do
+  [[ -z "$line" ]] && continue
+  HASH="${line%% *}"
+  SUBJECT="${line#* }"
+  if [[ ! -f "$CHANGELOG" ]] || ! grep -q "$HASH" "$CHANGELOG" 2>/dev/null; then
+    MISSING="${MISSING}   | \`$HASH\` | $DATE | $SUBJECT |\n"
+  fi
+done < <(git log ORIG_HEAD..HEAD --no-merges --format="%h %s" 2>/dev/null || true)
+
+if [[ -n "$MISSING" ]]; then
+  echo ""
+  echo "📝 [post-merge] 以下 commit 未在 XTU-CHANGES.md 中，请补充："
+  echo ""
+  printf "%b" "$MISSING"
+  echo ""
+fi
+
+exit 0
