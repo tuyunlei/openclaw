@@ -85,7 +85,7 @@ describe("loadModelCatalog", () => {
     }
   });
 
-  it("adds openai-codex alias models when base gpt-5.3-codex exists", async () => {
+  it("adds openai-codex/gpt-5.3-codex-spark when base gpt-5.3-codex exists", async () => {
     mockPiDiscoveryModels([
       {
         id: "gpt-5.3-codex",
@@ -103,17 +103,15 @@ describe("loadModelCatalog", () => {
     ]);
 
     const result = await loadModelCatalog({ config: {} as OpenClawConfig });
-    for (const id of ["gpt-5.3-codex-spark", "gpt-5.4", "gpt-5.4-codex"]) {
-      expect(result).toContainEqual(
-        expect.objectContaining({
-          provider: "openai-codex",
-          id,
-        }),
-      );
-      const aliasModel = result.find((entry) => entry.id === id);
-      expect(aliasModel?.name).toBe(id);
-      expect(aliasModel?.reasoning).toBe(true);
-    }
+    expect(result).toContainEqual(
+      expect.objectContaining({
+        provider: "openai-codex",
+        id: "gpt-5.3-codex-spark",
+      }),
+    );
+    const spark = result.find((entry) => entry.id === "gpt-5.3-codex-spark");
+    expect(spark?.name).toBe("gpt-5.3-codex-spark");
+    expect(spark?.reasoning).toBe(true);
   });
 
   it("merges configured models for opted-in non-pi-native providers", async () => {
