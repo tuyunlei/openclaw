@@ -341,8 +341,14 @@ export async function runPreparedReply(
     isMainSession,
     isNewSession,
   });
+  // [CACHE] System events moved from system prompt to user message body.
+  // Injecting timestamped system events into the SP invalidates the entire message history
+  // cache (Anthropic caches from prefix; SP change breaks all cached messages that follow).
+  // Prepending to the user message preserves SP stability while still delivering event context.
   if (queuedSystemPrompt) {
-    extraSystemPromptParts.push(queuedSystemPrompt);
+    prefixedBodyBase = prefixedBodyBase
+      ? `${queuedSystemPrompt}\n\n${prefixedBodyBase}`
+      : queuedSystemPrompt;
   }
   prefixedBodyBase = appendUntrustedContext(prefixedBodyBase, sessionCtx.UntrustedContext);
   const threadStarterBody = ctx.ThreadStarterBody?.trim();
