@@ -853,6 +853,9 @@ async function sendSubagentAnnounceDirectly(params: {
       !params.requesterIsSubagent && Boolean(completionChannel) && Boolean(completionTo);
 
     if (
+      (!isWorkflowMode ||
+        params.completionRouteMode === "hook" ||
+        params.completionRouteMode === "bound") &&
       params.expectsCompletionMessage &&
       hasCompletionDirectTarget &&
       params.completionMessage?.trim()
