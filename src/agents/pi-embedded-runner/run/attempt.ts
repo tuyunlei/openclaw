@@ -1214,6 +1214,7 @@ export async function runEmbeddedAttempt(
         provider: params.provider,
         modelId: params.modelId,
         modelApi: params.model.api,
+        authProfileId: params.authProfileId,
         workspaceDir: params.workspaceDir,
       });
 

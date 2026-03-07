@@ -23,6 +23,7 @@ type PayloadLogEvent = {
   provider?: string;
   modelId?: string;
   modelApi?: string | null;
+  authProfileId?: string;
   workspaceDir?: string;
   payload?: unknown;
   usage?: Record<string, unknown>;
@@ -139,6 +140,7 @@ export function createAnthropicPayloadLogger(params: {
   provider?: string;
   modelId?: string;
   modelApi?: string | null;
+  authProfileId?: string;
   workspaceDir?: string;
   writers?: PayloadLogWriter[];
   writer?: PayloadLogWriter;
@@ -184,6 +186,7 @@ export function createAnthropicPayloadLogger(params: {
     provider: params.provider,
     modelId: params.modelId,
     modelApi: params.modelApi,
+    authProfileId: params.authProfileId,
     workspaceDir: params.workspaceDir,
   };
 
