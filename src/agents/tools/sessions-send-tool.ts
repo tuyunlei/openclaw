@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { Type } from "@sinclair/typebox";
 import { loadConfig } from "../../config/config.js";
 import { callGateway } from "../../gateway/call.js";
+import { ADMIN_SCOPE } from "../../gateway/method-scopes.js";
 import { normalizeAgentId, resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { SESSION_LABEL_MAX_LENGTH } from "../../sessions/session-label.js";
 import {
@@ -256,6 +257,7 @@ export function createSessionsSendTool(opts?: {
             method: "agent",
             params: sendParams,
             timeoutMs: 10_000,
+            scopes: [ADMIN_SCOPE],
           });
           if (typeof response?.runId === "string" && response.runId) {
             runId = response.runId;
@@ -284,6 +286,7 @@ export function createSessionsSendTool(opts?: {
           method: "agent",
           params: sendParams,
           timeoutMs: 10_000,
+          scopes: [ADMIN_SCOPE],
         });
         if (typeof response?.runId === "string" && response.runId) {
           runId = response.runId;

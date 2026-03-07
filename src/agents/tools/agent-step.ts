@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { callGateway } from "../../gateway/call.js";
+import { ADMIN_SCOPE } from "../../gateway/method-scopes.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import { AGENT_LANE_NESTED } from "../lanes.js";
 import { extractAssistantText, stripToolMessages } from "./sessions-helpers.js";
@@ -60,6 +61,13 @@ export async function runAgentStep(params: {
       },
     },
     timeoutMs: 10_000,
+    // A2A calls inherit owner privileges so the target session retains the
+    // full tool set. Without ADMIN_SCOPE the gateway resolves
+    // senderIsOwner=false, which strips ownerOnly tools (cron, gateway) from
+    // the run. That causes sanitizeSessionHistory to drop historical tool_use
+    // blocks for those tools, producing thinking-only assistant messages that
+    // Anthropic rejects.
+    scopes: [ADMIN_SCOPE],
   });
 
   const stepRunId = typeof response?.runId === "string" && response.runId ? response.runId : "";
