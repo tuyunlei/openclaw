@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Post-commit hook: remind agent to update XTU-CHANGES.md after commits to xtu/main.
+# Cannot block (post-hook), but fires right when the agent has full context.
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+[[ "$BRANCH" == "xtu/main" ]] || exit 0
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+CHANGELOG="$ROOT_DIR/../XTU-CHANGES.md"
+
+HASH=$(git rev-parse --short HEAD)
+SUBJECT=$(git log -1 --format="%s")
+DATE=$(date +%m-%d)
+
+if [[ ! -f "$CHANGELOG" ]] || ! grep -q "$HASH" "$CHANGELOG" 2>/dev/null; then
+  echo ""
+  echo "📝 [post-commit] XTU-CHANGES.md 未包含此 commit，请补充："
+  echo "   | \`$HASH\` | $DATE | $SUBJECT |"
+  echo ""
+fi
+
+exit 0

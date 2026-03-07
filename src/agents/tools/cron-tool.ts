@@ -268,7 +268,6 @@ Default: prefer isolated agentTurn jobs unless the user explicitly wants a main-
 WAKE MODES (for wake action):
 - "next-heartbeat" (default): Wake on next heartbeat
 - "now": Wake immediately
-- "agent-turn": Inject event and run a normal agent turn immediately (requires sessionKey)
 - sessionKey: Optional session key to wake (e.g. "agent:main:telegram:group:-100xxx:topic:4467"). Without it, wakes the main session.
 
 Use jobId as the canonical identifier; id is accepted for compatibility. Use contextMessages (0-10) to add previous messages as context to the job text.`,
