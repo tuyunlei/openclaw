@@ -1,6 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
-import { ACP_SPAWN_MODES, spawnAcpDirect } from "../acp-spawn.js";
+import { ACP_SPAWN_MODES, ACP_SPAWN_STREAM_TARGETS, spawnAcpDirect } from "../acp-spawn.js";
 import { optionalStringEnum } from "../schema/typebox.js";
 import { SUBAGENT_SPAWN_MODES, spawnSubagentDirect } from "../subagent-spawn.js";
 import type { AnyAgentTool } from "./common.js";
@@ -36,6 +36,7 @@ const SessionsSpawnToolSchema = Type.Object({
   cleanup: optionalStringEnum(["delete", "keep"] as const),
   announceMode: optionalStringEnum(ANNOUNCE_MODES),
   sandbox: optionalStringEnum(SESSIONS_SPAWN_SANDBOX_MODES),
+  streamTo: optionalStringEnum(ACP_SPAWN_STREAM_TARGETS),
 
   // Inline attachments (snapshot-by-value).
   // NOTE: Attachment contents are redacted from transcript persistence by sanitizeToolCallInputs.
@@ -43,7 +44,7 @@ const SessionsSpawnToolSchema = Type.Object({
     Type.Array(
       Type.Object({
         name: Type.String(),
-        content: Type.String({ maxLength: 6_700_000 }),
+        content: Type.String(),
         encoding: Type.Optional(optionalStringEnum(["utf8", "base64"] as const)),
         mimeType: Type.Optional(Type.String()),
       }),
@@ -99,6 +100,7 @@ export function createSessionsSpawnTool(opts?: {
       const cleanup =
         params.cleanup === "keep" || params.cleanup === "delete" ? params.cleanup : "keep";
       const sandbox = params.sandbox === "require" ? "require" : "inherit";
+      const streamTo = params.streamTo === "parent" ? "parent" : undefined;
       // Back-compat: older callers used timeoutSeconds for this tool.
       const timeoutSecondsCandidate =
         typeof params.runTimeoutSeconds === "number"
@@ -124,6 +126,13 @@ export function createSessionsSpawnTool(opts?: {
           }>)
         : undefined;
 
+      if (streamTo && runtime !== "acp") {
+        return jsonResult({
+          status: "error",
+          error: `streamTo is only supported for runtime=acp; got runtime=${runtime}`,
+        });
+      }
+
       if (runtime === "acp") {
         if (Array.isArray(attachments) && attachments.length > 0) {
           return jsonResult({
@@ -142,6 +151,7 @@ export function createSessionsSpawnTool(opts?: {
             thread,
             sandbox,
             announceMode,
+            streamTo,
           },
           {
             agentSessionKey: opts?.agentSessionKey,

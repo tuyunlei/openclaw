@@ -9,6 +9,7 @@ import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveUserPath } from "../utils.js";
 import { parseBooleanValue } from "../utils/boolean.js";
 import { safeJsonStringify } from "../utils/safe-json.js";
+import { redactImageDataForDiagnostics } from "./payload-redaction.js";
 import { getQueuedFileWriter, type QueuedFileWriter } from "./queued-file-writer.js";
 
 type PayloadLogStage = "request" | "usage";
@@ -140,6 +141,7 @@ export function createAnthropicPayloadLogger(params: {
   modelApi?: string | null;
   workspaceDir?: string;
   writers?: PayloadLogWriter[];
+  writer?: PayloadLogWriter;
 }): AnthropicPayloadLogger | null {
   const env = params.env ?? process.env;
 
@@ -157,6 +159,8 @@ export function createAnthropicPayloadLogger(params: {
   let activeWriters: PayloadLogWriter[];
   if (params.writers) {
     activeWriters = params.writers;
+  } else if (params.writer) {
+    activeWriters = [params.writer];
   } else {
     activeWriters = [];
     if (legacyCfg.enabled) {
@@ -200,12 +204,13 @@ export function createAnthropicPayloadLogger(params: {
         return streamFn(model, context, options);
       }
       const nextOnPayload = (payload: unknown) => {
+        const redactedPayload = redactImageDataForDiagnostics(payload);
         record({
           ...base,
           ts: new Date().toISOString(),
           stage: "request",
-          payload,
-          payloadDigest: digest(payload),
+          payload: redactedPayload,
+          payloadDigest: digest(redactedPayload),
         });
         options?.onPayload?.(payload);
       };

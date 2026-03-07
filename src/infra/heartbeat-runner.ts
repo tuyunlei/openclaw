@@ -590,11 +590,24 @@ function parseChannelFromSessionKey(sessionKey: string): {
   return { channel, to, threadId };
 }
 
+function appendHeartbeatWorkspacePathHint(prompt: string, workspaceDir: string): string {
+  if (!/heartbeat\.md/i.test(prompt)) {
+    return prompt;
+  }
+  const heartbeatFilePath = path.join(workspaceDir, DEFAULT_HEARTBEAT_FILENAME).replace(/\\/g, "/");
+  const hint = `When reading HEARTBEAT.md, use workspace file ${heartbeatFilePath} (exact case). Do not read docs/heartbeat.md.`;
+  if (prompt.includes(hint)) {
+    return prompt;
+  }
+  return `${prompt}\n${hint}`;
+}
+
 function resolveHeartbeatRunPrompt(params: {
   cfg: OpenClawConfig;
   heartbeat?: HeartbeatConfig;
   preflight: HeartbeatPreflight;
   canRelayToUser: boolean;
+  workspaceDir: string;
 }): HeartbeatPromptResolution {
   const pendingEventEntries = params.preflight.pendingEventEntries;
   const pendingEvents =
@@ -611,13 +624,14 @@ function resolveHeartbeatRunPrompt(params: {
   const hasExecCompletion = pendingEvents.some(isExecCompletionEvent);
   const hasCronEvents = cronEvents.length > 0;
   const hasWakeSystemEvents = params.preflight.isWakeReason && pendingEventEntries.length > 0;
-  const prompt = hasWakeSystemEvents
+  const basePrompt = hasWakeSystemEvents
     ? "Process pending system events."
     : hasExecCompletion
       ? buildExecEventPrompt({ deliverToUser: params.canRelayToUser })
       : hasCronEvents
         ? buildCronEventPrompt(cronEvents, { deliverToUser: params.canRelayToUser })
         : resolveHeartbeatPrompt(params.cfg, params.heartbeat);
+  const prompt = appendHeartbeatWorkspacePathHint(basePrompt, params.workspaceDir);
 
   return { prompt, hasExecCompletion, hasCronEvents };
 }
@@ -727,11 +741,13 @@ export async function runHeartbeatOnce(opts: {
   const canRelayToUser = Boolean(
     delivery.channel !== "none" && delivery.to && visibility.showAlerts,
   );
+  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
   const { prompt, hasExecCompletion, hasCronEvents } = resolveHeartbeatRunPrompt({
     cfg,
     heartbeat,
     preflight,
     canRelayToUser,
+    workspaceDir,
   });
   const entryProvider = entry?.lastChannel ?? "heartbeat";
   const ctx: Record<string, unknown> = {
