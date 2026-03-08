@@ -546,9 +546,13 @@ export async function runReplyAgent(params: {
 
     // Compute usage line before the early-return so block-streaming runs still
     // get a trailing usage footer even though the main payloads were already sent.
+    const responseUsageChannelKey = replyToChannel?.trim().toLowerCase();
     const responseUsageRaw =
       activeSessionEntry?.responseUsage ??
       (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined) ??
+      (responseUsageChannelKey
+        ? cfg.agents?.defaults?.responseUsageByChannel?.[responseUsageChannelKey]
+        : undefined) ??
       cfg.agents?.defaults?.responseUsage;
     const responseUsageMode = resolveResponseUsageMode(responseUsageRaw);
     if (responseUsageMode !== "off" && hasNonzeroUsage(usage)) {

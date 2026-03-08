@@ -194,6 +194,8 @@ export type AgentDefaultsConfig = {
   /** Default block streaming level when no override is present. */
   /** Default response usage display level for all sessions. */
   responseUsage?: "off" | "on" | "tokens" | "full";
+  /** Per-channel override for response usage display level, keyed by normalized channel id (e.g. "feishu", "telegram"). */
+  responseUsageByChannel?: Record<string, "off" | "on" | "tokens" | "full">;
   blockStreamingDefault?: "off" | "on";
   /**
    * Block streaming boundary:

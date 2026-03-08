@@ -150,6 +150,12 @@ export const AgentDefaultsSchema = z
     responseUsage: z
       .union([z.literal("off"), z.literal("on"), z.literal("tokens"), z.literal("full")])
       .optional(),
+    responseUsageByChannel: z
+      .record(
+        z.string(),
+        z.union([z.literal("off"), z.literal("on"), z.literal("tokens"), z.literal("full")]),
+      )
+      .optional(),
     blockStreamingDefault: z.union([z.literal("off"), z.literal("on")]).optional(),
     blockStreamingBreak: z.union([z.literal("text_end"), z.literal("message_end")]).optional(),
     blockStreamingChunk: BlockStreamingChunkSchema.optional(),
