@@ -238,7 +238,15 @@ export function buildGatewayCronService(params: {
     resolveSessionStorePath,
     sessionStorePath,
     enqueueSystemEvent: (text, opts) => {
-      const { agentId, cfg: runtimeConfig } = resolveCronAgent(opts?.agentId);
+      // When a sessionKey is provided, derive agentId from it so that
+      // resolveCronSessionKey doesn't mismatch (e.g. wake with sessionKey
+      // "agent:alpha:..." but no explicit agentId would default to "main",
+      // causing the text to enqueue to main's session instead of alpha's).
+      const derivedAgentId =
+        opts?.sessionKey && !opts?.agentId
+          ? normalizeAgentId(resolveAgentIdFromSessionKey(opts.sessionKey))
+          : undefined;
+      const { agentId, cfg: runtimeConfig } = resolveCronAgent(derivedAgentId || opts?.agentId);
       const sessionKey = resolveCronSessionKey({
         runtimeConfig,
         agentId,

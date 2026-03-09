@@ -1159,6 +1159,9 @@ export function startHeartbeatRunner(opts: {
         // and they don't get re-processed by a subsequent periodic heartbeat.
         const pendingEvents = drainSystemEvents(requestedSessionKey);
         const eventText = pendingEvents.join("\n").trim() || undefined;
+        log.info(
+          `heartbeat runner: Phase 3 event-driven wake: sessionKey=${requestedSessionKey} reason=${reason} drainedEvents=${pendingEvents.length} eventTextLen=${eventText?.length ?? 0}`,
+        );
         try {
           const res = await runEventDrivenTurn({
             cfg: state.cfg,
