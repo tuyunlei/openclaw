@@ -563,7 +563,7 @@ export async function enqueueRun(state: CronServiceState, id: string, mode?: "du
 
 export function wakeNow(
   state: CronServiceState,
-  opts: { mode: "now" | "next-heartbeat" | "agent-turn"; text: string; sessionKey?: string },
+  opts: { mode: "now" | "next-heartbeat"; text: string },
 ) {
   return wake(state, opts);
 }

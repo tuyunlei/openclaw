@@ -19,7 +19,7 @@ import { resolveInternalSessionKey, resolveMainSessionAlias } from "./sessions-h
 
 const CRON_ACTIONS = ["status", "list", "add", "update", "remove", "run", "runs", "wake"] as const;
 
-const CRON_WAKE_MODES = ["now", "next-heartbeat", "agent-turn"] as const;
+const CRON_WAKE_MODES = ["now", "next-heartbeat"] as const;
 const CRON_RUN_MODES = ["due", "force"] as const;
 
 const REMINDER_CONTEXT_MESSAGES_MAX = 10;
@@ -224,7 +224,7 @@ ACTIONS:
 - remove: Delete job (requires jobId)
 - run: Trigger job immediately (requires jobId)
 - runs: Get job run history (requires jobId)
-- wake: Send wake event (requires text, optional mode, optional sessionKey to target specific session)
+- wake: Send wake event (requires text, optional mode)
 
 JOB SCHEMA (for add action):
 {
@@ -268,7 +268,6 @@ Default: prefer isolated agentTurn jobs unless the user explicitly wants a main-
 WAKE MODES (for wake action):
 - "next-heartbeat" (default): Wake on next heartbeat
 - "now": Wake immediately
-- sessionKey: Optional session key to wake (e.g. "agent:main:telegram:group:-100xxx:topic:4467"). Without it, wakes the main session.
 
 Use jobId as the canonical identifier; id is accepted for compatibility. Use contextMessages (0-10) to add previous messages as context to the job text.`,
     parameters: CronToolSchema,
@@ -513,19 +512,11 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
         case "wake": {
           const text = readStringParam(params, "text", { required: true });
           const mode =
-            params.mode === "now" ||
-            params.mode === "next-heartbeat" ||
-            params.mode === "agent-turn"
+            params.mode === "now" || params.mode === "next-heartbeat"
               ? params.mode
               : "next-heartbeat";
-          const sessionKey = readStringParam(params, "sessionKey");
           return jsonResult(
-            await callGateway(
-              "wake",
-              gatewayOpts,
-              { mode, text, sessionKey },
-              { expectFinal: false },
-            ),
+            await callGateway("wake", gatewayOpts, { mode, text }, { expectFinal: false }),
           );
         }
         default:

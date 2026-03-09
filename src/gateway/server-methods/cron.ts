@@ -35,14 +35,12 @@ export const cronHandlers: GatewayRequestHandlers = {
       return;
     }
     const p = params as {
-      mode: "now" | "next-heartbeat" | "agent-turn";
+      mode: "now" | "next-heartbeat";
       text: string;
-      sessionKey?: string;
     };
     const result = await context.cron.wake({
       mode: p.mode,
       text: p.text,
-      sessionKey: p.sessionKey,
     });
     respond(true, result, undefined);
   },

@@ -9,20 +9,19 @@ import { addGatewayClientOptions, callGatewayFromCli } from "./gateway-rpc.js";
 type SystemEventOpts = GatewayRpcOpts & {
   text?: string;
   mode?: string;
-  session?: string;
   json?: boolean;
 };
 type SystemGatewayOpts = GatewayRpcOpts & { json?: boolean };
 
-const normalizeWakeMode = (raw: unknown): "now" | "next-heartbeat" | "agent-turn" => {
+const normalizeWakeMode = (raw: unknown): "now" | "next-heartbeat" => {
   const mode = typeof raw === "string" ? raw.trim() : "";
   if (!mode) {
     return "next-heartbeat";
   }
-  if (mode === "now" || mode === "next-heartbeat" || mode === "agent-turn") {
+  if (mode === "now" || mode === "next-heartbeat") {
     return mode;
   }
-  throw new Error("--mode must be now, next-heartbeat, or agent-turn");
+  throw new Error("--mode must be now or next-heartbeat");
 };
 
 async function runSystemGatewayCommand(
@@ -58,8 +57,7 @@ export function registerSystemCli(program: Command) {
       .command("event")
       .description("Enqueue a system event and optionally trigger a heartbeat")
       .requiredOption("--text <text>", "System event text")
-      .option("--mode <mode>", "Wake mode (now|next-heartbeat|agent-turn)", "next-heartbeat")
-      .option("--session <sessionKey>", "Target session key (required for agent-turn mode)")
+      .option("--mode <mode>", "Wake mode (now|next-heartbeat)", "next-heartbeat")
       .option("--json", "Output JSON", false),
   ).action(async (opts: SystemEventOpts) => {
     await runSystemGatewayCommand(
@@ -70,14 +68,7 @@ export function registerSystemCli(program: Command) {
           throw new Error("--text is required");
         }
         const mode = normalizeWakeMode(opts.mode);
-        if (mode === "agent-turn" && !opts.session) {
-          throw new Error("--session is required for agent-turn mode");
-        }
-        const wakeParams: Record<string, unknown> = { mode, text };
-        if (opts.session) {
-          wakeParams.sessionKey = opts.session;
-        }
-        return await callGatewayFromCli("wake", opts, wakeParams, { expectFinal: false });
+        return await callGatewayFromCli("wake", opts, { mode, text }, { expectFinal: false });
       },
       "ok",
     );

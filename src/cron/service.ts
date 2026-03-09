@@ -54,11 +54,7 @@ export class CronService {
     return this.state.store?.jobs.find((job) => job.id === id);
   }
 
-  async wake(opts: {
-    mode: "now" | "next-heartbeat" | "agent-turn";
-    text: string;
-    sessionKey?: string;
-  }) {
+  async wake(opts: { mode: "now" | "next-heartbeat"; text: string }) {
     return await ops.wakeNow(this.state, opts);
   }
 }

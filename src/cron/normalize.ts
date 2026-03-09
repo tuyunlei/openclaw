@@ -105,7 +105,7 @@ function coercePayload(payload: UnknownRecord) {
     } else if (hasText) {
       next.kind = "systemEvent";
     } else if (hasAgentTurnHint) {
-      // Accept partial agentTurn payload patches that only tweak agent-turn-only fields.
+      // Accept partial agentTurn payload patches that only tweak payload-specific fields.
       next.kind = "agentTurn";
     }
   }
