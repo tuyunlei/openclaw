@@ -17,7 +17,7 @@ import { resolveInternalSessionKey, resolveMainSessionAlias } from "./sessions-h
 // contain nested unions. Tool schemas need to stay provider-friendly, so we
 // accept "any object" here and validate at runtime.
 
-const CRON_ACTIONS = ["status", "list", "add", "update", "remove", "run", "runs", "wake"] as const;
+const CRON_ACTIONS = ["status", "list", "add", "update", "remove", "run", "runs"] as const;
 
 const CRON_WAKE_MODES = ["now", "next-heartbeat"] as const;
 const CRON_RUN_MODES = ["due", "force"] as const;
@@ -224,8 +224,6 @@ ACTIONS:
 - remove: Delete job (requires jobId)
 - run: Trigger job immediately (requires jobId)
 - runs: Get job run history (requires jobId)
-- wake: Send wake event (requires text, optional mode)
-
 JOB SCHEMA (for add action):
 {
   "name": "string (optional)",
@@ -264,10 +262,6 @@ CRITICAL CONSTRAINTS:
 - sessionTarget="isolated" REQUIRES payload.kind="agentTurn"
 - For webhook callbacks, use delivery.mode="webhook" with delivery.to set to a URL.
 Default: prefer isolated agentTurn jobs unless the user explicitly wants a main-session system event.
-
-WAKE MODES (for wake action):
-- "next-heartbeat" (default): Wake on next heartbeat
-- "now": Wake immediately
 
 Use jobId as the canonical identifier; id is accepted for compatibility. Use contextMessages (0-10) to add previous messages as context to the job text.`,
     parameters: CronToolSchema,
@@ -508,16 +502,6 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
             throw new Error("jobId required (id accepted for backward compatibility)");
           }
           return jsonResult(await callGateway("cron.runs", gatewayOpts, { id }));
-        }
-        case "wake": {
-          const text = readStringParam(params, "text", { required: true });
-          const mode =
-            params.mode === "now" || params.mode === "next-heartbeat"
-              ? params.mode
-              : "next-heartbeat";
-          return jsonResult(
-            await callGateway("wake", gatewayOpts, { mode, text }, { expectFinal: false }),
-          );
         }
         default:
           throw new Error(`Unknown action: ${action}`);
