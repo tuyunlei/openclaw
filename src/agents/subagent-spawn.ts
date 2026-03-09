@@ -651,6 +651,7 @@ export async function spawnSubagentDirect(
       cleanup,
       label: label || undefined,
       model: resolvedModel,
+      workspaceDir: spawnedMetadata.workspaceDir,
       runTimeoutSeconds,
       expectsCompletionMessage,
       spawnMode,
