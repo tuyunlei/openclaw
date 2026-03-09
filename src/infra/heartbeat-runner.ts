@@ -40,6 +40,7 @@ import { normalizeAgentId, toAgentStoreSessionKey } from "../routing/session-key
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { escapeRegExp } from "../utils.js";
 import { formatErrorMessage, hasErrnoCode } from "./errors.js";
+import { runEventDrivenTurn } from "./event-driven-turn.js";
 import { isWithinActiveHours } from "./heartbeat-active-hours.js";
 import {
   buildExecEventPrompt,
@@ -1151,6 +1152,33 @@ export function startHeartbeatRunner(opts: {
       const targetAgentId = requestedAgentId ?? resolveAgentIdFromSessionKey(requestedSessionKey);
       const targetAgent = state.agents.get(targetAgentId);
       const isEventDriven = isHeartbeatEventDrivenReason(reason);
+
+      // --- Phase 3: route event-driven wake to the new path ---
+      if (isEventDriven && requestedSessionKey) {
+        try {
+          const res = await runEventDrivenTurn({
+            cfg: state.cfg,
+            sessionKey: requestedSessionKey,
+            reason,
+            deps: { runtime: state.runtime },
+          });
+          if (targetAgent && (res.status !== "skipped" || res.reason !== "disabled")) {
+            advanceAgentSchedule(targetAgent, now);
+          }
+          scheduleNext();
+          return res.status === "ran" ? { status: "ran", durationMs: Date.now() - startedAt } : res;
+        } catch (err) {
+          const errMsg = formatErrorMessage(err);
+          log.error(`heartbeat runner: event-driven turn threw: ${errMsg}`, { error: errMsg });
+          if (targetAgent) {
+            advanceAgentSchedule(targetAgent, now);
+          }
+          scheduleNext();
+          return { status: "failed", reason: errMsg };
+        }
+      }
+
+      // Non-event-driven targeted wake (e.g. manual heartbeat trigger) — keep old path
       if (!targetAgent && !isEventDriven) {
         scheduleNext();
         return { status: "skipped", reason: "disabled" };
