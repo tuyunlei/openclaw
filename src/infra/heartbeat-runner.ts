@@ -64,7 +64,7 @@ import {
   resolveHeartbeatDeliveryTarget,
   resolveHeartbeatSenderContext,
 } from "./outbound/targets.js";
-import { peekSystemEventEntries } from "./system-events.js";
+import { drainSystemEvents, peekSystemEventEntries } from "./system-events.js";
 import { applySessionGroupContext } from "./system-turn-context.js";
 
 export type HeartbeatDeps = OutboundSendDeps &
@@ -1155,10 +1155,15 @@ export function startHeartbeatRunner(opts: {
 
       // --- Phase 3: route event-driven wake to the new path ---
       if (isEventDriven && requestedSessionKey) {
+        // Drain pending system events so their text reaches the agent turn
+        // and they don't get re-processed by a subsequent periodic heartbeat.
+        const pendingEvents = drainSystemEvents(requestedSessionKey);
+        const eventText = pendingEvents.join("\n").trim() || undefined;
         try {
           const res = await runEventDrivenTurn({
             cfg: state.cfg,
             sessionKey: requestedSessionKey,
+            text: eventText,
             reason,
             deps: { runtime: state.runtime },
           });

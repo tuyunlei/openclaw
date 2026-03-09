@@ -78,7 +78,11 @@ export async function runEventDrivenTurn(opts: {
   }
 
   const parsed = parseSessionKeyChannelRoute(sessionKey);
-  const delivery = resolveHeartbeatDeliveryTarget({ cfg, entry, heartbeat: { target: "last" } });
+  // Do NOT pass heartbeat config here — event-driven turns should not go through
+  // heartbeat delivery resolution (which uses mode:"heartbeat" and can fail).
+  // Without a heartbeat param, target defaults to "none", and the fallback to
+  // session-key-derived channel/to values kicks in correctly.
+  const delivery = resolveHeartbeatDeliveryTarget({ cfg, entry });
   const effectiveChannel =
     delivery.channel && delivery.channel !== "none" ? delivery.channel : parsed.channel;
   const effectiveTo = delivery.to ?? parsed.to;
