@@ -22,6 +22,7 @@ import { createSessionsSendTool } from "./tools/sessions-send-tool.js";
 import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 import { createSubagentsTool } from "./tools/subagents-tool.js";
 import { createTtsTool } from "./tools/tts-tool.js";
+import { createWakeTool } from "./tools/wake-tool.js";
 import { createWebFetchTool, createWebSearchTool } from "./tools/web-tools.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
 
@@ -141,6 +142,7 @@ export function createOpenClawTools(
     createCronTool({
       agentSessionKey: options?.agentSessionKey,
     }),
+    createWakeTool(),
     ...(messageTool ? [messageTool] : []),
     createTtsTool({
       agentChannel: options?.agentChannel,

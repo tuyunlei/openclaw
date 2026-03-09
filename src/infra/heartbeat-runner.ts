@@ -40,6 +40,7 @@ import { normalizeAgentId, toAgentStoreSessionKey } from "../routing/session-key
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { escapeRegExp } from "../utils.js";
 import { formatErrorMessage, hasErrnoCode } from "./errors.js";
+import { runEventDrivenTurn } from "./event-driven-turn.js";
 import { isWithinActiveHours } from "./heartbeat-active-hours.js";
 import {
   buildExecEventPrompt,
@@ -63,7 +64,8 @@ import {
   resolveHeartbeatDeliveryTarget,
   resolveHeartbeatSenderContext,
 } from "./outbound/targets.js";
-import { peekSystemEventEntries } from "./system-events.js";
+import { drainSystemEvents, peekSystemEventEntries } from "./system-events.js";
+import { applySessionGroupContext } from "./system-turn-context.js";
 
 export type HeartbeatDeps = OutboundSendDeps &
   ChannelHeartbeatDeps & {
@@ -710,26 +712,7 @@ export async function runHeartbeatOnce(opts: {
   };
   // Replay group-chat context from the session entry so that the system prompt
   // is byte-identical to a real message turn, enabling Anthropic prompt-cache hits.
-  if (entry) {
-    if (entry.chatType) {
-      ctx.ChatType = entry.chatType;
-    }
-    if (entry.subject) {
-      ctx.GroupSubject = entry.subject;
-    }
-    if (entry.groupMembers) {
-      ctx.GroupMembers = entry.groupMembers;
-    }
-    if (entry.groupSystemPrompt) {
-      ctx.GroupSystemPrompt = entry.groupSystemPrompt;
-    }
-    if (entry.groupChannel) {
-      ctx.GroupChannel = entry.groupChannel;
-    }
-    if (entry.space) {
-      ctx.GroupSpace = entry.space;
-    }
-  }
+  applySessionGroupContext(ctx, entry);
   if (!visibility.showAlerts && !visibility.showOk && !visibility.useIndicator) {
     emitHeartbeatEvent({
       status: "skipped",
@@ -1169,6 +1152,41 @@ export function startHeartbeatRunner(opts: {
       const targetAgentId = requestedAgentId ?? resolveAgentIdFromSessionKey(requestedSessionKey);
       const targetAgent = state.agents.get(targetAgentId);
       const isEventDriven = isHeartbeatEventDrivenReason(reason);
+
+      // --- Phase 3: route event-driven wake to the new path ---
+      if (isEventDriven && requestedSessionKey) {
+        // Drain pending system events so their text reaches the agent turn
+        // and they don't get re-processed by a subsequent periodic heartbeat.
+        const pendingEvents = drainSystemEvents(requestedSessionKey);
+        const eventText = pendingEvents.join("\n").trim() || undefined;
+        log.info(
+          `heartbeat runner: Phase 3 event-driven wake: sessionKey=${requestedSessionKey} reason=${reason} drainedEvents=${pendingEvents.length} eventTextLen=${eventText?.length ?? 0}`,
+        );
+        try {
+          const res = await runEventDrivenTurn({
+            cfg: state.cfg,
+            sessionKey: requestedSessionKey,
+            text: eventText,
+            reason,
+            deps: { runtime: state.runtime },
+          });
+          if (targetAgent && (res.status !== "skipped" || res.reason !== "disabled")) {
+            advanceAgentSchedule(targetAgent, now);
+          }
+          scheduleNext();
+          return res.status === "ran" ? { status: "ran", durationMs: Date.now() - startedAt } : res;
+        } catch (err) {
+          const errMsg = formatErrorMessage(err);
+          log.error(`heartbeat runner: event-driven turn threw: ${errMsg}`, { error: errMsg });
+          if (targetAgent) {
+            advanceAgentSchedule(targetAgent, now);
+          }
+          scheduleNext();
+          return { status: "failed", reason: errMsg };
+        }
+      }
+
+      // Non-event-driven targeted wake (e.g. manual heartbeat trigger) — keep old path
       if (!targetAgent && !isEventDriven) {
         scheduleNext();
         return { status: "skipped", reason: "disabled" };
