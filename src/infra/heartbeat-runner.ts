@@ -48,7 +48,7 @@ import {
   isExecCompletionEvent,
 } from "./heartbeat-events-filter.js";
 import { emitHeartbeatEvent, resolveIndicatorType } from "./heartbeat-events.js";
-import { resolveHeartbeatReasonKind } from "./heartbeat-reason.js";
+import { isHeartbeatEventDrivenReason, resolveHeartbeatReasonKind } from "./heartbeat-reason.js";
 import { resolveHeartbeatVisibility } from "./heartbeat-visibility.js";
 import {
   type HeartbeatRunResult,
@@ -1168,20 +1168,24 @@ export function startHeartbeatRunner(opts: {
     if (requestedSessionKey || requestedAgentId) {
       const targetAgentId = requestedAgentId ?? resolveAgentIdFromSessionKey(requestedSessionKey);
       const targetAgent = state.agents.get(targetAgentId);
-      if (!targetAgent) {
+      const isEventDriven = isHeartbeatEventDrivenReason(reason);
+      if (!targetAgent && !isEventDriven) {
         scheduleNext();
         return { status: "skipped", reason: "disabled" };
       }
+      const effectiveAgentId = targetAgent?.agentId ?? targetAgentId;
+      const effectiveHeartbeat =
+        targetAgent?.heartbeat ?? resolveHeartbeatConfig(state.cfg, targetAgentId);
       try {
         const res = await runOnce({
           cfg: state.cfg,
-          agentId: targetAgent.agentId,
-          heartbeat: targetAgent.heartbeat,
+          agentId: effectiveAgentId,
+          heartbeat: effectiveHeartbeat,
           reason,
           sessionKey: requestedSessionKey,
           deps: { runtime: state.runtime },
         });
-        if (res.status !== "skipped" || res.reason !== "disabled") {
+        if (targetAgent && (res.status !== "skipped" || res.reason !== "disabled")) {
           advanceAgentSchedule(targetAgent, now);
         }
         scheduleNext();
@@ -1191,7 +1195,9 @@ export function startHeartbeatRunner(opts: {
         log.error(`heartbeat runner: targeted runOnce threw unexpectedly: ${errMsg}`, {
           error: errMsg,
         });
-        advanceAgentSchedule(targetAgent, now);
+        if (targetAgent) {
+          advanceAgentSchedule(targetAgent, now);
+        }
         scheduleNext();
         return { status: "failed", reason: errMsg };
       }
