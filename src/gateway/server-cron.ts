@@ -20,6 +20,7 @@ import { CronService } from "../cron/service.js";
 import { resolveCronStorePath } from "../cron/store.js";
 import { normalizeHttpWebhookUrl } from "../cron/webhook-url.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { runEventDrivenTurn } from "../infra/event-driven-turn.js";
 import { runHeartbeatOnce } from "../infra/heartbeat-runner.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { fetchWithSsrFGuard } from "../infra/net/fetch-guard.js";
@@ -255,10 +256,20 @@ export function buildGatewayCronService(params: {
     },
     runHeartbeatOnce: async (opts) => {
       const { runtimeConfig, agentId, sessionKey } = resolveCronWakeTarget(opts);
-      // Merge cron-supplied heartbeat overrides (e.g. target: "last") with the
-      // fully resolved agent heartbeat config so cron-triggered heartbeats
-      // respect agent-specific overrides (agents.list[].heartbeat) before
-      // falling back to agents.defaults.heartbeat.
+
+      // Phase 4: cron-triggered wakes with a sessionKey use the event-driven
+      // path directly, bypassing heartbeat protocol (HEARTBEAT_OK stripping,
+      // visibility, duplicate suppression, etc.).
+      if (sessionKey && opts?.reason) {
+        return await runEventDrivenTurn({
+          cfg: runtimeConfig,
+          sessionKey,
+          reason: opts.reason,
+          deps: { ...params.deps, runtime: defaultRuntime },
+        });
+      }
+
+      // Fallback: non-session-targeted or reason-less calls keep old heartbeat path
       const agentEntry =
         Array.isArray(runtimeConfig.agents?.list) &&
         runtimeConfig.agents.list.find(
