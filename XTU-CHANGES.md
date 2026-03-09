@@ -202,3 +202,4 @@ ACP 工作流、子代理调度、thread projection 等。
 | `5d9e9e7d8f` | 02-22 13:47 | Merge xtu/develop into xtu/main                                   |
 | `b3562114ab` | 02-21 21:17 | Merge main into xtu/main（上游同步）                              |
 | `3128fc881b` | 02-21 00:15 | Merge feat/delivery-logs into xtu/develop                         |
+| `0bf17d477b` | 03-09       | fix: pass cwd param to subagent spawn workspaceDir                |
