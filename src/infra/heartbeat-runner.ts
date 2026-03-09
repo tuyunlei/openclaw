@@ -64,6 +64,7 @@ import {
   resolveHeartbeatSenderContext,
 } from "./outbound/targets.js";
 import { peekSystemEventEntries } from "./system-events.js";
+import { applySessionGroupContext } from "./system-turn-context.js";
 
 export type HeartbeatDeps = OutboundSendDeps &
   ChannelHeartbeatDeps & {
@@ -710,26 +711,7 @@ export async function runHeartbeatOnce(opts: {
   };
   // Replay group-chat context from the session entry so that the system prompt
   // is byte-identical to a real message turn, enabling Anthropic prompt-cache hits.
-  if (entry) {
-    if (entry.chatType) {
-      ctx.ChatType = entry.chatType;
-    }
-    if (entry.subject) {
-      ctx.GroupSubject = entry.subject;
-    }
-    if (entry.groupMembers) {
-      ctx.GroupMembers = entry.groupMembers;
-    }
-    if (entry.groupSystemPrompt) {
-      ctx.GroupSystemPrompt = entry.groupSystemPrompt;
-    }
-    if (entry.groupChannel) {
-      ctx.GroupChannel = entry.groupChannel;
-    }
-    if (entry.space) {
-      ctx.GroupSpace = entry.space;
-    }
-  }
+  applySessionGroupContext(ctx, entry);
   if (!visibility.showAlerts && !visibility.showOk && !visibility.useIndicator) {
     emitHeartbeatEvent({
       status: "skipped",
