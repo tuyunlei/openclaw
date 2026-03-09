@@ -37,10 +37,12 @@ export const cronHandlers: GatewayRequestHandlers = {
     const p = params as {
       mode: "now" | "next-heartbeat";
       text: string;
+      sessionKey?: string;
     };
     const result = await context.cron.wake({
       mode: p.mode,
       text: p.text,
+      sessionKey: p.sessionKey,
     });
     respond(true, result, undefined);
   },
