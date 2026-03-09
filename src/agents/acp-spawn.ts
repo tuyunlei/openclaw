@@ -451,20 +451,6 @@ export async function spawnAcpDirect(
   const workflowMode = params.announceMode === "workflow";
   const suppressDirectDelivery = workflowMode || streamToParentRequested;
   const shouldDeliverToUser = hasDeliveryTarget && !suppressDirectDelivery;
-  const acpThreadProjection =
-    workflowMode && binding && boundThreadId
-      ? {
-          enabled: true,
-          target: {
-            channel: binding.conversation.channel,
-            accountId: binding.conversation.accountId,
-            to: `channel:${boundThreadId}`,
-            threadId: boundThreadId,
-          },
-          includeToolSummaries: true,
-        }
-      : undefined;
-  acpManager.setThreadProjection(sessionKey, acpThreadProjection);
   const childIdem = crypto.randomUUID();
   let childRunId: string = childIdem;
   const streamLogPath =
@@ -495,7 +481,6 @@ export async function spawnAcpDirect(
         to: shouldDeliverToUser ? inferredDeliveryTo : undefined,
         accountId: shouldDeliverToUser ? (requesterOrigin?.accountId ?? undefined) : undefined,
         threadId: shouldDeliverToUser ? deliveryThreadId : undefined,
-        acpThreadProjection,
         idempotencyKey: childIdem,
         deliver: shouldDeliverToUser,
         label: params.label || undefined,
@@ -533,7 +518,6 @@ export async function spawnAcpDirect(
       runTimeoutSeconds: 0,
       expectsCompletionMessage: false,
       spawnMode,
-      announceMode: params.announceMode,
     });
   }
 

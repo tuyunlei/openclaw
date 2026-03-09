@@ -84,12 +84,6 @@ export function registerDiscordSubagentHooks(api: OpenClawPluginApi) {
       return {
         status: "ok" as const,
         threadBindingReady: true,
-        threadProjectionTarget: {
-          channel: "discord",
-          accountId: binding.accountId,
-          to: `channel:${binding.threadId}`,
-          threadId: binding.threadId,
-        },
       };
     } catch (err) {
       return {

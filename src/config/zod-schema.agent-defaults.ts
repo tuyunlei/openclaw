@@ -194,12 +194,6 @@ export const AgentDefaultsSchema = z
         thinking: z.string().optional(),
         runTimeoutSeconds: z.number().int().min(0).optional(),
         announceTimeoutMs: z.number().int().positive().optional(),
-        threadProjection: z
-          .object({
-            live: z.boolean().optional(),
-          })
-          .strict()
-          .optional(),
       })
       .strict()
       .optional(),

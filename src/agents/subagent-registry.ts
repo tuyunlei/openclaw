@@ -30,11 +30,6 @@ import {
   type SubagentLifecycleEndedReason,
 } from "./subagent-lifecycle-events.js";
 import {
-  createSubagentReplyProjector,
-  type SubagentReplyProjector,
-  type SubagentThreadProjectionTarget,
-} from "./subagent-projector.js";
-import {
   resolveCleanupCompletionReason,
   resolveDeferredCleanupDecision,
 } from "./subagent-registry-cleanup.js";
@@ -66,7 +61,6 @@ export type { SubagentRunRecord } from "./subagent-registry.types.js";
 const log = createSubsystemLogger("agents/subagent-registry");
 
 const subagentRuns = new Map<string, SubagentRunRecord>();
-const threadProjectorsByRunId = new Map<string, SubagentReplyProjector>();
 let sweeper: NodeJS.Timeout | null = null;
 let listenerStarted = false;
 let listenerStop: (() => void) | null = null;
@@ -138,54 +132,6 @@ function logAnnounceGiveUp(entry: SubagentRunRecord, reason: "retry-limit" | "ex
 
 function persistSubagentRuns() {
   persistSubagentRunsToDisk(subagentRuns);
-}
-
-function isSubagentThreadProjectionLiveEnabled() {
-  const cfg = loadConfig();
-  return cfg.agents?.defaults?.subagents?.threadProjection?.live === true;
-}
-
-export function registerSubagentThreadProjector(params: {
-  runId: string;
-  target?: SubagentThreadProjectionTarget;
-  includeToolSummaries?: boolean;
-}) {
-  const runId = params.runId?.trim();
-  if (!runId || !params.target?.channel || !params.target?.to) {
-    return;
-  }
-  if (!isSubagentThreadProjectionLiveEnabled()) {
-    return;
-  }
-  const previous = threadProjectorsByRunId.get(runId);
-  if (previous) {
-    void previous.close({ flush: false });
-    threadProjectorsByRunId.delete(runId);
-  }
-  threadProjectorsByRunId.set(
-    runId,
-    createSubagentReplyProjector({
-      runId,
-      target: params.target,
-      includeToolSummaries: params.includeToolSummaries,
-    }),
-  );
-}
-
-export async function releaseSubagentThreadProjector(
-  runId: string,
-  opts?: { flush?: boolean },
-): Promise<void> {
-  const key = runId?.trim();
-  if (!key) {
-    return;
-  }
-  const projector = threadProjectorsByRunId.get(key);
-  if (!projector) {
-    return;
-  }
-  threadProjectorsByRunId.delete(key);
-  await projector.close({ flush: opts?.flush !== false });
 }
 
 function findSessionEntryByKey(store: Record<string, SessionEntry>, sessionKey: string) {
@@ -504,7 +450,6 @@ async function completeSubagentRun(params: {
   triggerCleanup: boolean;
 }) {
   clearPendingLifecycleError(params.runId);
-  await releaseSubagentThreadProjector(params.runId, { flush: true });
   const entry = subagentRuns.get(params.runId);
   if (!entry) {
     return;
@@ -599,7 +544,6 @@ function startSubagentAnnounceCleanupFlow(runId: string, entry: SubagentRunRecor
     outcome: entry.outcome,
     spawnMode: entry.spawnMode,
     expectsCompletionMessage: entry.expectsCompletionMessage,
-    announceMode: entry.announceMode,
     wakeOnDescendantSettle: entry.wakeOnDescendantSettle === true,
   })
     .then((didAnnounce) => {
@@ -767,7 +711,6 @@ async function sweepSubagentRuns() {
       continue;
     }
     clearPendingLifecycleError(runId);
-    await releaseSubagentThreadProjector(runId, { flush: false });
     void notifyContextEngineSubagentEnded({
       childSessionKey: entry.childSessionKey,
       reason: "swept",
@@ -805,14 +748,7 @@ function ensureListener() {
   listenerStarted = true;
   listenerStop = onAgentEvent((evt) => {
     void (async () => {
-      if (!evt) {
-        return;
-      }
-      const projector = threadProjectorsByRunId.get(evt.runId);
-      if (projector) {
-        await projector.onEvent(evt);
-      }
-      if (evt.stream !== "lifecycle") {
+      if (!evt || evt.stream !== "lifecycle") {
         return;
       }
       const phase = evt.data?.phase;
@@ -838,7 +774,6 @@ function ensureListener() {
       const endedAt = typeof evt.data?.endedAt === "number" ? evt.data.endedAt : Date.now();
       const error = typeof evt.data?.error === "string" ? evt.data.error : undefined;
       if (phase === "error") {
-        await releaseSubagentThreadProjector(evt.runId, { flush: true });
         schedulePendingLifecycleError({
           runId: evt.runId,
           endedAt,
@@ -846,7 +781,6 @@ function ensureListener() {
         });
         return;
       }
-      await releaseSubagentThreadProjector(evt.runId, { flush: true });
       clearPendingLifecycleError(evt.runId);
       const outcome: SubagentRunOutcome = evt.data?.aborted
         ? { status: "timeout" }
@@ -1212,7 +1146,6 @@ export function registerSubagentRun(params: {
   runTimeoutSeconds?: number;
   expectsCompletionMessage?: boolean;
   spawnMode?: "run" | "session";
-  announceMode?: "notify" | "workflow";
   attachmentsDir?: string;
   attachmentsRootDir?: string;
   retainAttachmentsOnKeep?: boolean;
@@ -1236,7 +1169,6 @@ export function registerSubagentRun(params: {
     cleanup: params.cleanup,
     expectsCompletionMessage: params.expectsCompletionMessage,
     spawnMode,
-    announceMode: params.announceMode,
     label: params.label,
     model: params.model,
     runTimeoutSeconds,
@@ -1330,10 +1262,6 @@ export function resetSubagentRegistryForTests(opts?: { persist?: boolean }) {
   endedHookInFlightRunIds.clear();
   clearAllPendingLifecycleErrors();
   resetAnnounceQueuesForTests();
-  for (const [runId, projector] of threadProjectorsByRunId.entries()) {
-    void projector.close({ flush: false });
-    threadProjectorsByRunId.delete(runId);
-  }
   stopSweeper();
   restoreAttempted = false;
   if (listenerStop) {
@@ -1352,7 +1280,6 @@ export function addSubagentRunForTests(entry: SubagentRunRecord) {
 
 export function releaseSubagentRun(runId: string) {
   clearPendingLifecycleError(runId);
-  void releaseSubagentThreadProjector(runId, { flush: false });
   const entry = subagentRuns.get(runId);
   if (entry) {
     void notifyContextEngineSubagentEnded({
@@ -1435,7 +1362,6 @@ export function markSubagentRunTerminated(params: {
   const entriesByChildSessionKey = new Map<string, SubagentRunRecord>();
   for (const runId of runIds) {
     clearPendingLifecycleError(runId);
-    void releaseSubagentThreadProjector(runId, { flush: false });
     const entry = subagentRuns.get(runId);
     if (!entry) {
       continue;

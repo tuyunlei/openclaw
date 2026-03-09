@@ -1,4 +1,3 @@
-import type { AcpThreadProjectionConfig } from "../../commands/agent/types.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { appendAssistantMessageToSessionTranscript } from "../../config/sessions/transcript.js";
 import { logVerbose } from "../../globals.js";
@@ -81,7 +80,6 @@ export class AcpSessionManager {
   private readonly actorTailBySession = this.actorQueue.getTailMapForTesting();
   private readonly runtimeCache = new RuntimeCache();
   private readonly activeTurnBySession = new Map<string, ActiveTurnState>();
-  private readonly threadProjectionBySession = new Map<string, AcpThreadProjectionConfig>();
   private readonly turnLatencyStats: TurnLatencyStats = {
     completed: 0,
     failed: 0,
@@ -93,26 +91,6 @@ export class AcpSessionManager {
   private lastEvictedAt: number | undefined;
 
   constructor(private readonly deps: AcpSessionManagerDeps = DEFAULT_DEPS) {}
-
-  setThreadProjection(sessionKey: string, config: AcpThreadProjectionConfig | undefined): void {
-    const normalizedSessionKey = normalizeSessionKey(sessionKey);
-    if (!normalizedSessionKey) {
-      return;
-    }
-    if (config) {
-      this.threadProjectionBySession.set(normalizedSessionKey, config);
-      return;
-    }
-    this.threadProjectionBySession.delete(normalizedSessionKey);
-  }
-
-  getThreadProjection(sessionKey: string): AcpThreadProjectionConfig | undefined {
-    const normalizedSessionKey = normalizeSessionKey(sessionKey);
-    if (!normalizedSessionKey) {
-      return undefined;
-    }
-    return this.threadProjectionBySession.get(normalizedSessionKey);
-  }
 
   resolveSession(params: { cfg: OpenClawConfig; sessionKey: string }): AcpSessionResolution {
     const sessionKey = normalizeSessionKey(params.sessionKey);
@@ -920,7 +898,6 @@ export class AcpSessionManager {
         sessionKey,
       });
       if (resolution.kind === "none") {
-        this.threadProjectionBySession.delete(sessionKey);
         if (input.requireAcpSession ?? true) {
           throw new AcpRuntimeError(
             "ACP_SESSION_INIT_FAILED",
@@ -933,7 +910,6 @@ export class AcpSessionManager {
         };
       }
       if (resolution.kind === "stale") {
-        this.threadProjectionBySession.delete(sessionKey);
         if (input.requireAcpSession ?? true) {
           throw resolution.error;
         }
@@ -995,7 +971,6 @@ export class AcpSessionManager {
           failOnError: true,
         });
         metaCleared = true;
-        this.threadProjectionBySession.delete(sessionKey);
       }
 
       return {

@@ -714,12 +714,6 @@ export type PluginHookSubagentSpawningResult =
   | {
       status: "ok";
       threadBindingReady?: boolean;
-      threadProjectionTarget?: {
-        channel?: string;
-        accountId?: string;
-        to?: string;
-        threadId?: string | number;
-      };
     }
   | {
       status: "error";

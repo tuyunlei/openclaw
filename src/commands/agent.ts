@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { getAcpSessionManager } from "../acp/control-plane/manager.js";
 import { resolveAcpAgentPolicyError, resolveAcpDispatchPolicyError } from "../acp/policy.js";
 import { toAcpRuntimeError } from "../acp/runtime/errors.js";
@@ -39,7 +38,6 @@ import { buildWorkspaceSkillSnapshot } from "../agents/skills.js";
 import { getSkillsSnapshotVersion } from "../agents/skills/refresh.js";
 import { resolveAgentTimeoutMs } from "../agents/timeout.js";
 import { ensureAgentWorkspace } from "../agents/workspace.js";
-import { createAcpReplyProjector } from "../auto-reply/reply/acp-projector.js";
 import { normalizeReplyPayload } from "../auto-reply/reply/normalize-reply.js";
 import {
   formatThinkingLevels,
@@ -71,7 +69,6 @@ import {
   type SessionEntry,
   updateSessionStore,
 } from "../config/sessions.js";
-import { callGateway } from "../gateway/call.js";
 import {
   clearAgentRunContext,
   emitAgentEvent,
@@ -577,54 +574,6 @@ async function agentCommandInternal(
 
       const visibleTextAccumulator = createAcpVisibleTextAccumulator();
       let stopReason: string | undefined;
-      const acpThreadProjectionConfig =
-        opts.acpThreadProjection ?? acpManager.getThreadProjection(sessionKey);
-      const acpThreadProjectionTarget =
-        acpThreadProjectionConfig?.enabled === true ? acpThreadProjectionConfig.target : undefined;
-      const acpProjector =
-        acpThreadProjectionTarget &&
-        acpThreadProjectionTarget.channel?.trim() &&
-        acpThreadProjectionTarget.to?.trim()
-          ? createAcpReplyProjector({
-              cfg,
-              shouldSendToolSummaries: acpThreadProjectionConfig?.includeToolSummaries !== false,
-              provider: acpThreadProjectionTarget.channel,
-              accountId: acpThreadProjectionTarget.accountId,
-              deliver: async (_kind, payload) => {
-                if (!payload.text && !payload.mediaUrl) {
-                  return false;
-                }
-                try {
-                  await callGateway({
-                    method: "send",
-                    params: {
-                      channel: acpThreadProjectionTarget.channel,
-                      to: acpThreadProjectionTarget.to,
-                      accountId: acpThreadProjectionTarget.accountId,
-                      threadId: acpThreadProjectionTarget.threadId,
-                      message: payload.text,
-                      mediaUrl: payload.mediaUrl,
-                      idempotencyKey: crypto.randomUUID(),
-                    },
-                    timeoutMs: 10_000,
-                  });
-                  return true;
-                } catch {
-                  return false;
-                }
-              },
-            })
-          : null;
-      // Send task prompt to thread before starting the ACP turn
-      if (acpProjector && body) {
-        const MAX_TASK_PREVIEW = 1900;
-        const taskPreview =
-          body.length > MAX_TASK_PREVIEW ? body.slice(0, MAX_TASK_PREVIEW) + "…" : body;
-        void acpProjector.onEvent({
-          type: "status" as const,
-          text: `📋 Task:\n${taskPreview}`,
-        });
-      }
 
       try {
         const dispatchPolicyError = resolveAcpDispatchPolicyError(cfg);
@@ -649,9 +598,6 @@ async function agentCommandInternal(
           onEvent: async (event) => {
             if (event.type === "done") {
               stopReason = event.stopReason;
-            }
-            if (acpProjector) {
-              void acpProjector.onEvent(event);
             }
             if (event.type !== "text_delta") {
               return;
@@ -692,8 +638,6 @@ async function agentCommandInternal(
           },
         });
         throw acpError;
-      } finally {
-        await acpProjector?.flush(true);
       }
 
       emitAgentEvent({

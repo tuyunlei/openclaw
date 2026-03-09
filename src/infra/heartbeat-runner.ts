@@ -7,7 +7,6 @@ import {
 } from "../agents/agent-scope.js";
 import { appendCronStyleCurrentTimeLine } from "../agents/current-time.js";
 import { resolveEffectiveMessagesConfig } from "../agents/identity.js";
-import { resolveEmbeddedSessionLane } from "../agents/pi-embedded-runner/lanes.js";
 import { DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
 import { resolveHeartbeatReplyPayload } from "../auto-reply/heartbeat-reply-payload.js";
 import {
@@ -37,8 +36,6 @@ import {
 } from "../config/sessions.js";
 import type { AgentDefaultsConfig } from "../config/types.agent-defaults.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { getQueueSize } from "../process/command-queue.js";
-import { CommandLane } from "../process/lanes.js";
 import { normalizeAgentId, toAgentStoreSessionKey } from "../routing/session-key.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { escapeRegExp } from "../utils.js";
@@ -561,35 +558,6 @@ type HeartbeatPromptResolution = {
   hasCronEvents: boolean;
 };
 
-function parseChannelFromSessionKey(sessionKey: string): {
-  channel?: string;
-  to?: string;
-  threadId?: string;
-} {
-  const parts = sessionKey.split(":");
-  if (parts.length < 3 || parts[0] !== "agent") {
-    return {};
-  }
-  const channel = parts[2];
-  if (!channel || channel === "main") {
-    return {};
-  }
-
-  const kindIdx = parts.indexOf("group", 3);
-  const chanIdx = kindIdx < 0 ? parts.indexOf("channel", 3) : kindIdx;
-  let to: string | undefined;
-  if (chanIdx >= 0 && chanIdx + 1 < parts.length) {
-    const topicIdx = parts.indexOf("topic", chanIdx + 1);
-    const idParts = topicIdx > 0 ? parts.slice(chanIdx + 1, topicIdx) : parts.slice(chanIdx + 1);
-    const chatId = idParts.join(":");
-    to = `${channel}:${chatId}`;
-  }
-
-  const topicIdx = parts.indexOf("topic");
-  const threadId = topicIdx >= 0 && topicIdx + 1 < parts.length ? parts[topicIdx + 1] : undefined;
-  return { channel, to, threadId };
-}
-
 function appendHeartbeatWorkspacePathHint(prompt: string, workspaceDir: string): string {
   if (!/heartbeat\.md/i.test(prompt)) {
     return prompt;
@@ -686,31 +654,9 @@ export async function runHeartbeatOnce(opts: {
     return { status: "skipped", reason: "quiet-hours" };
   }
 
-  const queueLane = hasForcedSessionKey
-    ? resolveEmbeddedSessionLane(preflight.session.sessionKey)
-    : CommandLane.Main;
-  const queueSize = (opts.deps?.getQueueSize ?? getQueueSize)(queueLane);
-  if (queueSize > 0) {
-    return { status: "skipped", reason: "requests-in-flight" };
-  }
   const { entry, sessionKey, storePath } = preflight.session;
   const previousUpdatedAt = entry?.updatedAt;
-  let delivery = resolveHeartbeatDeliveryTarget({ cfg, entry, heartbeat });
-  if (delivery.channel === "none" || !delivery.to) {
-    const parsed = parseChannelFromSessionKey(sessionKey);
-    if (parsed.channel && parsed.to) {
-      delivery = {
-        ...delivery,
-        channel: parsed.channel,
-        to: parsed.to,
-        threadId:
-          delivery.threadId ??
-          parsed.threadId ??
-          entry?.lastThreadId ??
-          entry?.deliveryContext?.threadId,
-      };
-    }
-  }
+  const delivery = resolveHeartbeatDeliveryTarget({ cfg, entry, heartbeat });
   const heartbeatAccountId = heartbeat?.accountId?.trim();
   if (delivery.reason === "unknown-account") {
     log.warn("heartbeat: unknown accountId", {

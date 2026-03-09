@@ -485,30 +485,14 @@ export function createAcpReplyProjector(params: {
       return;
     }
 
-    if (event.type === "done") {
+    if (event.type === "done" || event.type === "error") {
       await flush(true);
       resetTurnState();
-      await params.deliver("block", { text: "✅ Task completed." });
-      return;
     }
-    if (event.type === "error") {
-      await flush(true);
-      resetTurnState();
-      const errMsg = "message" in event && event.message ? String(event.message) : "Unknown error";
-      await params.deliver("block", { text: `❌ Task failed: ${errMsg}` });
-      return;
-    }
-  };
-
-  // Serial queue: ensures onEvent calls execute in order even when called without await.
-  let queue: Promise<void> = Promise.resolve();
-  const enqueue = (fn: () => Promise<void>): Promise<void> => {
-    queue = queue.then(fn, fn);
-    return queue;
   };
 
   return {
-    onEvent: (event: AcpRuntimeEvent) => enqueue(() => onEvent(event)),
-    flush: (force?: boolean) => enqueue(() => flush(force)),
+    onEvent,
+    flush,
   };
 }

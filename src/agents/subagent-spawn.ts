@@ -19,13 +19,7 @@ import { resolveSubagentSpawnModelSelection } from "./model-selection.js";
 import { resolveSandboxRuntimeStatus } from "./sandbox/runtime-status.js";
 import { buildSubagentSystemPrompt } from "./subagent-announce.js";
 import { getSubagentDepthFromSessionStore } from "./subagent-depth.js";
-import { type SubagentThreadProjectionTarget } from "./subagent-projector.js";
-import {
-  countActiveRunsForSession,
-  registerSubagentRun,
-  registerSubagentThreadProjector,
-  releaseSubagentThreadProjector,
-} from "./subagent-registry.js";
+import { countActiveRunsForSession, registerSubagentRun } from "./subagent-registry.js";
 import { readStringParam } from "./tools/common.js";
 import {
   resolveDisplaySessionKey,
@@ -189,34 +183,6 @@ function summarizeError(err: unknown): string {
   return "error";
 }
 
-const MAX_TASK_PREVIEW = 1900;
-
-function resolveProjectionTargetFromHookResult(
-  target:
-    | {
-        channel?: string;
-        accountId?: string;
-        to?: string;
-        threadId?: string | number;
-      }
-    | undefined,
-): SubagentThreadProjectionTarget | undefined {
-  const channel = typeof target?.channel === "string" ? target.channel.trim() : "";
-  const to = typeof target?.to === "string" ? target.to.trim() : "";
-  if (!channel || !to) {
-    return undefined;
-  }
-  const accountId = typeof target?.accountId === "string" ? target.accountId.trim() : "";
-  const threadId =
-    target?.threadId != null && target.threadId !== "" ? String(target.threadId).trim() : "";
-  return {
-    channel,
-    to,
-    accountId: accountId || undefined,
-    threadId: threadId || undefined,
-  };
-}
-
 async function ensureThreadBindingForSubagentSpawn(params: {
   hookRunner: ReturnType<typeof getGlobalHookRunner>;
   childSessionKey: string;
@@ -230,10 +196,7 @@ async function ensureThreadBindingForSubagentSpawn(params: {
     to?: string;
     threadId?: string | number;
   };
-}): Promise<
-  | { status: "ok"; projectionTarget?: SubagentThreadProjectionTarget }
-  | { status: "error"; error: string }
-> {
+}): Promise<{ status: "ok" } | { status: "error"; error: string }> {
   const hookRunner = params.hookRunner;
   if (!hookRunner?.hasHooks("subagent_spawning")) {
     return {
@@ -272,10 +235,7 @@ async function ensureThreadBindingForSubagentSpawn(params: {
           "Unable to create or bind a thread for this subagent session. Session mode is unavailable for this target.",
       };
     }
-    return {
-      status: "ok",
-      projectionTarget: resolveProjectionTargetFromHookResult(result.threadProjectionTarget),
-    };
+    return { status: "ok" };
   } catch (err) {
     return {
       status: "error",
@@ -346,7 +306,6 @@ export async function spawnSubagentDirect(
       : cfgSubagentTimeout;
   let modelApplied = false;
   let threadBindingReady = false;
-  let threadProjectionTarget: SubagentThreadProjectionTarget | undefined;
   const { mainKey, alias } = resolveMainSessionAlias(cfg);
   const requesterSessionKey = ctx.agentSessionKey;
   const requesterInternalKey = requesterSessionKey
@@ -529,26 +488,6 @@ export async function spawnSubagentDirect(
       };
     }
     threadBindingReady = true;
-    threadProjectionTarget = bindResult.projectionTarget;
-    if (params.announceMode === "workflow" && threadProjectionTarget) {
-      const taskPreview =
-        task.length > MAX_TASK_PREVIEW ? `${task.slice(0, MAX_TASK_PREVIEW)}…` : task;
-      void callGateway({
-        method: "send",
-        params: {
-          channel: threadProjectionTarget.channel,
-          to: threadProjectionTarget.to,
-          accountId: threadProjectionTarget.accountId,
-          threadId: threadProjectionTarget.threadId,
-          message: `📋 Task:
-${taskPreview}`,
-          idempotencyKey: crypto.randomUUID(),
-        },
-        timeoutMs: 10_000,
-      }).catch(() => {
-        // Best-effort projection only.
-      });
-    }
   }
   const mountPathHint = sanitizeMountPathHint(params.attachMountPath);
 
@@ -789,9 +728,6 @@ ${taskPreview}`,
       childRunId = response.runId;
     }
   } catch (err) {
-    if (childRunId) {
-      void releaseSubagentThreadProjector(childRunId, { flush: false });
-    }
     if (attachmentAbsDir) {
       try {
         await fs.rm(attachmentAbsDir, { recursive: true, force: true });
@@ -851,14 +787,6 @@ ${taskPreview}`,
     };
   }
 
-  if (params.announceMode === "workflow" && threadProjectionTarget) {
-    registerSubagentThreadProjector({
-      runId: childRunId,
-      target: threadProjectionTarget,
-      includeToolSummaries: true,
-    });
-  }
-
   try {
     registerSubagentRun({
       runId: childRunId,
@@ -873,13 +801,11 @@ ${taskPreview}`,
       runTimeoutSeconds,
       expectsCompletionMessage,
       spawnMode,
-      announceMode: params.announceMode,
       attachmentsDir: attachmentAbsDir,
       attachmentsRootDir: attachmentRootDir,
       retainAttachmentsOnKeep: retainOnSessionKeep,
     });
   } catch (err) {
-    void releaseSubagentThreadProjector(childRunId, { flush: false });
     if (attachmentAbsDir) {
       try {
         await fs.rm(attachmentAbsDir, { recursive: true, force: true });
