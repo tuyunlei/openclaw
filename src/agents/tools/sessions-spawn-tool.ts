@@ -195,7 +195,7 @@ export function createSessionsSpawnTool(
           agentGroupChannel: opts?.agentGroupChannel,
           agentGroupSpace: opts?.agentGroupSpace,
           requesterAgentIdOverride: opts?.requesterAgentIdOverride,
-          workspaceDir: cwd || opts?.workspaceDir,
+          workspaceDir: opts?.workspaceDir,
         },
       );
 

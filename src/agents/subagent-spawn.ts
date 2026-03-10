@@ -19,7 +19,6 @@ import { resolveSandboxRuntimeStatus } from "./sandbox/runtime-status.js";
 import {
   mapToolContextToSpawnedRunMetadata,
   normalizeSpawnedRunMetadata,
-  resolveSpawnedWorkspaceInheritance,
 } from "./spawned-context.js";
 import { buildSubagentSystemPrompt } from "./subagent-announce.js";
 import {
@@ -544,14 +543,12 @@ export async function spawnSubagentDirect(
     agentGroupSpace: ctx.agentGroupSpace,
     workspaceDir: ctx.workspaceDir,
   });
+  // Don't propagate parent workspace — let the runner resolve workspace from the
+  // child agent's own config (via resolveRunWorkspaceDir fallback). Only pass
+  // workspaceDir when there's an explicit override from the spawn caller.
   const spawnedMetadata = normalizeSpawnedRunMetadata({
     spawnedBy: spawnedByKey,
     ...toolSpawnMetadata,
-    workspaceDir: resolveSpawnedWorkspaceInheritance({
-      config: cfg,
-      requesterSessionKey: requesterInternalKey,
-      explicitWorkspaceDir: toolSpawnMetadata.workspaceDir,
-    }),
   });
 
   const childIdem = crypto.randomUUID();
