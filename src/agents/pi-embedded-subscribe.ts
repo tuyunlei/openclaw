@@ -86,6 +86,13 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     cacheWrite: 0,
     total: 0,
   };
+  /** Usage from the most recent individual API call (overwritten, not accumulated). */
+  const lastCallUsage = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+  };
   let compactionCount = 0;
 
   const assistantTexts = state.assistantTexts;
@@ -281,6 +288,11 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       usage.total ??
       (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
     usageTotals.total += usageTotal;
+    // Track per-call values (overwrite, not accumulate) for accurate context-size reporting.
+    lastCallUsage.input = usage.input ?? 0;
+    lastCallUsage.output = usage.output ?? 0;
+    lastCallUsage.cacheRead = usage.cacheRead ?? 0;
+    lastCallUsage.cacheWrite = usage.cacheWrite ?? 0;
   };
   const getUsageTotals = () => {
     const hasUsage =
@@ -300,6 +312,11 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       cacheRead: usageTotals.cacheRead || undefined,
       cacheWrite: usageTotals.cacheWrite || undefined,
       total: usageTotals.total || derivedTotal || undefined,
+      // Per-call values from the most recent API call (not accumulated).
+      // Used by mergeUsageIntoAccumulator for accurate context-size reporting.
+      lastInput: lastCallUsage.input || undefined,
+      lastCacheRead: lastCallUsage.cacheRead || undefined,
+      lastCacheWrite: lastCallUsage.cacheWrite || undefined,
     };
   };
   const incrementCompactionCount = () => {

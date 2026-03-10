@@ -155,7 +155,13 @@ const hasUsageValues = (
 
 const mergeUsageIntoAccumulator = (
   target: UsageAccumulator,
-  usage: ReturnType<typeof normalizeUsage>,
+  usage:
+    | (ReturnType<typeof normalizeUsage> & {
+        lastInput?: number;
+        lastCacheRead?: number;
+        lastCacheWrite?: number;
+      })
+    | undefined,
 ) => {
   if (!hasUsageValues(usage)) {
     return;
@@ -170,9 +176,11 @@ const mergeUsageIntoAccumulator = (
   // Track the most recent API call's cache fields for accurate context-size reporting.
   // Accumulated cache totals inflate context size when there are multiple tool-call round-trips,
   // since each call reports cacheRead ≈ current_context_size.
-  target.lastCacheRead = usage.cacheRead ?? 0;
-  target.lastCacheWrite = usage.cacheWrite ?? 0;
-  target.lastInput = usage.input ?? 0;
+  // Prefer per-call values (lastInput/lastCacheRead/lastCacheWrite) tracked by the subscription;
+  // fall back to usage.cacheRead etc. only when per-call fields are absent (single-call attempts).
+  target.lastCacheRead = usage.lastCacheRead ?? usage.cacheRead ?? 0;
+  target.lastCacheWrite = usage.lastCacheWrite ?? usage.cacheWrite ?? 0;
+  target.lastInput = usage.lastInput ?? usage.input ?? 0;
 };
 
 const toNormalizedUsage = (usage: UsageAccumulator) => {
