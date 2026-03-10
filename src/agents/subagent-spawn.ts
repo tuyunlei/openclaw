@@ -544,11 +544,11 @@ export async function spawnSubagentDirect(
     workspaceDir: ctx.workspaceDir,
   });
   // Don't propagate parent workspace — let the runner resolve workspace from the
-  // child agent's own config (via resolveRunWorkspaceDir fallback). Only pass
-  // workspaceDir when there's an explicit override from the spawn caller.
+  // child agent's own config (via resolveRunWorkspaceDir fallback).
+  const { workspaceDir: _parentWorkspace, ...groupMetadata } = toolSpawnMetadata;
   const spawnedMetadata = normalizeSpawnedRunMetadata({
     spawnedBy: spawnedByKey,
-    ...toolSpawnMetadata,
+    ...groupMetadata,
   });
 
   const childIdem = crypto.randomUUID();
