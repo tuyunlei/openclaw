@@ -59,7 +59,7 @@ export function handleAutoCompactionEnd(
     ctx.log.debug(`embedded run compaction retry: runId=${ctx.params.runId}`);
   } else {
     ctx.maybeResolveCompactionWait();
-    clearStaleAssistantUsageOnSessionMessages(ctx);
+    clearStaleAssistantUsageOnSessionMessages(ctx, evt.result);
   }
   emitAgentEvent({
     runId: ctx.params.runId,
@@ -90,16 +90,29 @@ export function handleAutoCompactionEnd(
   }
 }
 
-function clearStaleAssistantUsageOnSessionMessages(ctx: EmbeddedPiSubscribeContext): void {
+function clearStaleAssistantUsageOnSessionMessages(
+  ctx: EmbeddedPiSubscribeContext,
+  compactionResult?: unknown,
+): void {
   const messages = ctx.params.session.messages;
   if (!Array.isArray(messages)) {
     return;
   }
+
+  const firstKeptEntryId =
+    compactionResult && typeof compactionResult === "object"
+      ? (compactionResult as { firstKeptEntryId?: unknown }).firstKeptEntryId
+      : undefined;
+  const boundaryId = typeof firstKeptEntryId === "string" ? firstKeptEntryId.trim() : "";
+
   for (const message of messages) {
     if (!message || typeof message !== "object") {
       continue;
     }
-    const candidate = message as { role?: unknown; usage?: unknown };
+    const candidate = message as { role?: unknown; usage?: unknown; id?: unknown };
+    if (boundaryId && candidate.id === boundaryId) {
+      break;
+    }
     if (candidate.role !== "assistant") {
       continue;
     }

@@ -153,6 +153,11 @@ const hasUsageValues = (
     (value) => typeof value === "number" && Number.isFinite(value) && value > 0,
   );
 
+const hasNonzeroPromptUsage = (
+  usage: ReturnType<typeof normalizeUsage>,
+): usage is NonNullable<ReturnType<typeof normalizeUsage>> =>
+  !!usage && (usage.input ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0) > 0;
+
 const mergeUsageIntoAccumulator = (
   target: UsageAccumulator,
   usage:
@@ -244,8 +249,8 @@ function buildErrorAgentMeta(params: {
   if (usage && params.lastTurnTotal && params.lastTurnTotal > 0) {
     usage.total = params.lastTurnTotal;
   }
-  const lastCallUsage = params.lastAssistant
-    ? normalizeUsage(params.lastAssistant.usage as UsageLike)
+  const lastCallUsage = hasNonzeroPromptUsage(params.lastRunPromptUsage)
+    ? params.lastRunPromptUsage
     : undefined;
   const promptTokens = derivePromptTokens(params.lastRunPromptUsage);
   return {
@@ -945,11 +950,14 @@ export async function runEmbeddedPiAgent(
               : bootstrapPromptWarningSignaturesSeen);
           const lastAssistantUsage = normalizeUsage(lastAssistant?.usage as UsageLike);
           const attemptUsage = attempt.attemptUsage ?? lastAssistantUsage;
+          const freshestPromptUsage = hasNonzeroPromptUsage(lastAssistantUsage)
+            ? lastAssistantUsage
+            : attemptUsage;
           mergeUsageIntoAccumulator(usageAccumulator, attemptUsage);
           // Keep prompt size from the latest model call so session totalTokens
           // reflects current context usage, not accumulated tool-loop usage.
-          lastRunPromptUsage = lastAssistantUsage ?? attemptUsage;
-          lastTurnTotal = lastAssistantUsage?.total ?? attemptUsage?.total;
+          lastRunPromptUsage = freshestPromptUsage;
+          lastTurnTotal = freshestPromptUsage?.total ?? attemptUsage?.total;
           const attemptCompactionCount = Math.max(0, attempt.compactionCount ?? 0);
           autoCompactionCount += attemptCompactionCount;
           const activeErrorContext = resolveActiveErrorContext({
@@ -1398,7 +1406,9 @@ export async function runEmbeddedPiAgent(
           // across all calls (tool-use loops, compaction retries), which
           // overstates the actual context size. `lastCallUsage` reflects only
           // the final call, giving an accurate snapshot of current context.
-          const lastCallUsage = normalizeUsage(lastAssistant?.usage as UsageLike);
+          const lastCallUsage = hasNonzeroPromptUsage(lastRunPromptUsage)
+            ? lastRunPromptUsage
+            : undefined;
           const promptTokens = derivePromptTokens(lastRunPromptUsage);
           const agentMeta: EmbeddedPiAgentMeta = {
             sessionId: sessionIdUsed,

@@ -1,5 +1,6 @@
 import type { OpenClawConfig } from "../../config/config.js";
 import { normalizeProviderId } from "../model-selection.js";
+import { log } from "./constants.js";
 import { saveAuthProfileStore, updateAuthProfileStoreWithLock } from "./store.js";
 import type { AuthProfileFailureReason, AuthProfileStore, ProfileUsageStats } from "./types.js";
 
@@ -262,6 +263,18 @@ export async function markAuthProfileUsed(params: {
     return;
   }
 
+  log.warn(
+    "markAuthProfileUsed: lock failed, saving stale store (may overwrite refreshed tokens)",
+    {
+      profileId,
+      oauthProfiles: Object.entries(store.profiles)
+        .filter(([, c]) => c.type === "oauth")
+        .map(([id, c]) => ({
+          id,
+          refreshPrefix: (c as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)",
+        })),
+    },
+  );
   updateUsageStatsEntry(store, profileId, (existing) =>
     resetUsageStats(existing, { lastUsed: Date.now() }),
   );
@@ -491,6 +504,19 @@ export async function markAuthProfileFailure(params: {
     return;
   }
 
+  log.warn(
+    "markAuthProfileFailure: lock failed, saving stale store (may overwrite refreshed tokens)",
+    {
+      profileId,
+      reason,
+      oauthProfiles: Object.entries(store.profiles)
+        .filter(([, c]) => c.type === "oauth")
+        .map(([id, c]) => ({
+          id,
+          refreshPrefix: (c as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)",
+        })),
+    },
+  );
   const now = Date.now();
   const providerKey = normalizeProviderId(store.profiles[profileId]?.provider ?? "");
   const cfgResolved = resolveAuthCooldownConfig({
@@ -556,6 +582,18 @@ export async function clearAuthProfileCooldown(params: {
     return;
   }
 
+  log.warn(
+    "clearAuthProfileCooldown: lock failed, saving stale store (may overwrite refreshed tokens)",
+    {
+      profileId,
+      oauthProfiles: Object.entries(store.profiles)
+        .filter(([, c]) => c.type === "oauth")
+        .map(([id, c]) => ({
+          id,
+          refreshPrefix: (c as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)",
+        })),
+    },
+  );
   updateUsageStatsEntry(store, profileId, (existing) => resetUsageStats(existing));
   saveAuthProfileStore(store, agentDir);
 }

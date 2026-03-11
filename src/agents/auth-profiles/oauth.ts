@@ -176,6 +176,15 @@ async function refreshOAuthTokenWithLock(params: {
       };
     }
 
+    const oldRefreshPrefix = (cred as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)";
+    log.info("OAuth refresh starting", {
+      profileId: params.profileId,
+      provider: cred.provider,
+      oldRefreshPrefix,
+      expiresAt: new Date(cred.expires).toISOString(),
+      agentDir: params.agentDir ?? "(main)",
+    });
+
     const oauthCreds: Record<string, OAuthCredentials> = {
       [cred.provider]: cred,
     };
@@ -201,8 +210,24 @@ async function refreshOAuthTokenWithLock(params: {
               return await getOAuthApiKey(oauthProvider, oauthCreds);
             })();
     if (!result) {
+      log.warn("OAuth refresh returned null", {
+        profileId: params.profileId,
+        provider: cred.provider,
+      });
       return null;
     }
+    const newRefreshPrefix =
+      (result.newCredentials as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)";
+    const newExpires = (result.newCredentials as { expires?: number }).expires;
+    log.info("OAuth refresh succeeded, saving", {
+      profileId: params.profileId,
+      provider: cred.provider,
+      oldRefreshPrefix,
+      newRefreshPrefix,
+      refreshChanged: oldRefreshPrefix !== newRefreshPrefix,
+      newExpiresAt: newExpires ? new Date(newExpires).toISOString() : "(unknown)",
+      agentDir: params.agentDir ?? "(main)",
+    });
     store.profiles[params.profileId] = {
       ...cred,
       ...result.newCredentials,
@@ -385,6 +410,13 @@ export async function resolveApiKeyForProfile(
       email: oauthCred.email,
     });
   }
+
+  log.info("resolveApiKeyForProfile: token expired, triggering refresh", {
+    profileId,
+    provider: cred.provider,
+    expiresAt: new Date(oauthCred.expires).toISOString(),
+    expiredAgo: `${Math.round((Date.now() - oauthCred.expires) / 1000)}s`,
+  });
 
   try {
     const result = await refreshOAuthTokenWithLock({

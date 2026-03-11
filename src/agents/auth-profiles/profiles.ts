@@ -1,6 +1,7 @@
 import { normalizeStringEntries } from "../../shared/string-normalization.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
 import { normalizeProviderId, normalizeProviderIdForAuth } from "../model-selection.js";
+import { log } from "./constants.js";
 import {
   ensureAuthProfileStore,
   saveAuthProfileStore,
@@ -110,6 +111,19 @@ export async function markAuthProfileGood(params: {
   if (!profile || profile.provider !== provider) {
     return;
   }
+  log.warn(
+    "markAuthProfileGood: lock failed, saving stale store (may overwrite refreshed tokens)",
+    {
+      profileId,
+      provider,
+      oauthProfiles: Object.entries(store.profiles)
+        .filter(([, c]) => c.type === "oauth")
+        .map(([id, c]) => ({
+          id,
+          refreshPrefix: (c as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)",
+        })),
+    },
+  );
   store.lastGood = { ...store.lastGood, [provider]: profileId };
   saveAuthProfileStore(store, agentDir);
 }

@@ -62,7 +62,13 @@ export async function persistSessionUsageUpdate(params: {
     typeof params.promptTokens === "number" &&
     Number.isFinite(params.promptTokens) &&
     params.promptTokens > 0;
-  const hasFreshContextSnapshot = Boolean(params.lastCallUsage) || hasPromptTokens;
+  const hasNonzeroLastCall =
+    !!params.lastCallUsage &&
+    (params.lastCallUsage.input ?? 0) +
+      (params.lastCallUsage.cacheRead ?? 0) +
+      (params.lastCallUsage.cacheWrite ?? 0) >
+      0;
+  const hasFreshContextSnapshot = hasNonzeroLastCall || hasPromptTokens;
 
   if (hasUsage || hasFreshContextSnapshot) {
     try {
