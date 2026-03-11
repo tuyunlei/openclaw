@@ -699,10 +699,17 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
   api.on("session_before_compact", async (event, ctx) => {
     const { preparation, customInstructions, signal } = event;
     if (!preparation.messagesToSummarize.some(isRealConversationMessage)) {
-      log.warn(
-        "Compaction safeguard: cancelling compaction with no real conversation messages to summarize.",
-      );
-      return { cancel: true };
+      const runtime = getCompactionSafeguardRuntime(ctx.sessionManager);
+      if (runtime?.force) {
+        log.info(
+          "Compaction safeguard: no real conversation messages to summarize, but force=true (manual /compact) — proceeding.",
+        );
+      } else {
+        log.warn(
+          "Compaction safeguard: cancelling compaction with no real conversation messages to summarize.",
+        );
+        return { cancel: true };
+      }
     }
     const { readFiles, modifiedFiles } = computeFileLists(preparation.fileOps);
     const fileOpsSummary = formatFileOperations(readFiles, modifiedFiles);

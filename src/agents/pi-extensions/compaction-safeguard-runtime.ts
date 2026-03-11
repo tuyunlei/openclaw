@@ -16,6 +16,11 @@ export type CompactionSafeguardRuntimeValue = {
   recentTurnsPreserve?: number;
   qualityGuardEnabled?: boolean;
   qualityGuardMaxRetries?: number;
+  /**
+   * When true (manual /compact), skip the "no real conversation messages" safeguard
+   * so the user can force compaction even when keepRecentTokens covers all messages.
+   */
+  force?: boolean;
 };
 
 const registry = createSessionManagerRuntimeRegistry<CompactionSafeguardRuntimeValue>();

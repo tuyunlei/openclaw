@@ -67,6 +67,8 @@ export function buildEmbeddedExtensionFactories(params: {
   provider: string;
   modelId: string;
   model: Model<Api> | undefined;
+  /** Pass true for manual /compact to bypass "no real messages" safeguard. */
+  force?: boolean;
 }): ExtensionFactory[] {
   const factories: ExtensionFactory[] = [];
   if (resolveCompactionMode(params.cfg) === "safeguard") {
@@ -88,6 +90,7 @@ export function buildEmbeddedExtensionFactories(params: {
       qualityGuardMaxRetries: qualityGuardCfg?.maxRetries,
       model: params.model,
       recentTurnsPreserve: compactionCfg?.recentTurnsPreserve,
+      force: params.force,
     });
     factories.push(compactionSafeguardExtension);
   }
