@@ -8,6 +8,14 @@
 
 ---
 
+## 🔍 Diagnostics: OAuth Refresh Logging (03-11)
+
+| Hash         | 时间  | 摘要                                                        |
+| ------------ | ----- | ----------------------------------------------------------- |
+| `950b3b8dae` | 03-11 | diag: add OAuth refresh diagnostic logging to auth-profiles |
+
+---
+
 ## 🔌 Temp: GPT-5.4 Forward-Compat (xtu/develop only, pending upstream #36966)
 
 临时 cherry-pick PR #36966（yuweuii），待上游合入后回退。
