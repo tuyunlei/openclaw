@@ -193,7 +193,7 @@ export async function runReplyAgent(params: {
     }
   };
 
-  if (shouldSteer && isStreaming) {
+  if (shouldSteer && isStreaming && !isHeartbeat) {
     const steered = queueEmbeddedPiMessage(followupRun.run.sessionId, followupRun.prompt);
     if (steered && !shouldFollowup) {
       await touchActiveSessionEntry();
