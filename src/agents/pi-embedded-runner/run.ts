@@ -950,9 +950,34 @@ export async function runEmbeddedPiAgent(
               : bootstrapPromptWarningSignaturesSeen);
           const lastAssistantUsage = normalizeUsage(lastAssistant?.usage as UsageLike);
           const attemptUsage = attempt.attemptUsage ?? lastAssistantUsage;
+          // Extract per-call values when falling back to attemptUsage.
+          // attemptUsage.input/cacheRead/cacheWrite are ACCUMULATED across all API calls
+          // within the attempt (tool-use loops), which inflates context-window percentage.
+          // attemptUsage.lastInput/lastCacheRead/lastCacheWrite are per-call (from subscription).
           const freshestPromptUsage = hasNonzeroPromptUsage(lastAssistantUsage)
             ? lastAssistantUsage
-            : attemptUsage;
+            : (() => {
+                const raw = attemptUsage as
+                  | (NonNullable<typeof attemptUsage> & {
+                      lastInput?: number;
+                      lastCacheRead?: number;
+                      lastCacheWrite?: number;
+                    })
+                  | undefined;
+                const li = raw?.lastInput ?? 0;
+                const lr = raw?.lastCacheRead ?? 0;
+                const lw = raw?.lastCacheWrite ?? 0;
+                if (li + lr + lw > 0) {
+                  return {
+                    input: li,
+                    cacheRead: lr,
+                    cacheWrite: lw,
+                    output: attemptUsage?.output,
+                    total: li + lr + lw + (attemptUsage?.output ?? 0) || undefined,
+                  };
+                }
+                return attemptUsage;
+              })();
           mergeUsageIntoAccumulator(usageAccumulator, attemptUsage);
           // Keep prompt size from the latest model call so session totalTokens
           // reflects current context usage, not accumulated tool-loop usage.
