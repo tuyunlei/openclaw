@@ -11,7 +11,10 @@ import { resolveHeartbeatPrompt } from "../../../auto-reply/heartbeat.js";
 import { resolveChannelCapabilities } from "../../../config/channel-capabilities.js";
 import type { OpenClawConfig } from "../../../config/config.js";
 import { getMachineDisplayName } from "../../../infra/machine-name.js";
-import { ensureGlobalUndiciStreamTimeouts } from "../../../infra/net/undici-global-dispatcher.js";
+import {
+  ensureGlobalUndiciEnvProxyDispatcher,
+  ensureGlobalUndiciStreamTimeouts,
+} from "../../../infra/net/undici-global-dispatcher.js";
 import { MAX_IMAGE_BYTES } from "../../../media/constants.js";
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
 import type {
@@ -123,6 +126,7 @@ import { collectAllowedToolNames } from "../tool-name-allowlist.js";
 import { splitSdkTools } from "../tool-split.js";
 import { describeUnknownError, mapThinkingLevel } from "../utils.js";
 import { flushPendingToolResultsAfterIdle } from "../wait-for-idle-before-flush.js";
+import { waitForCompactionRetryWithAggregateTimeout } from "./compaction-retry-aggregate-timeout.js";
 import {
   selectCompactionTimeoutSnapshot,
   shouldFlagCompactionTimeout,
@@ -228,15 +232,14 @@ export function wrapOllamaCompatNumCtx(baseFn: StreamFn | undefined, numCtx: num
       ...options,
       onPayload: (payload: unknown) => {
         if (!payload || typeof payload !== "object") {
-          options?.onPayload?.(payload);
-          return;
+          return options?.onPayload?.(payload, model);
         }
         const payloadRecord = payload as Record<string, unknown>;
         if (!payloadRecord.options || typeof payloadRecord.options !== "object") {
           payloadRecord.options = {};
         }
         (payloadRecord.options as Record<string, unknown>).num_ctx = numCtx;
-        options?.onPayload?.(payload);
+        return options?.onPayload?.(payload, model);
       },
     });
 }
@@ -748,6 +751,9 @@ export async function runEmbeddedAttempt(
   const resolvedWorkspace = resolveUserPath(params.workspaceDir);
   const prevCwd = process.cwd();
   const runAbortController = new AbortController();
+  // Proxy bootstrap must happen before timeout tuning so the timeouts wrap the
+  // active EnvHttpProxyAgent instead of being replaced by a bare proxy dispatcher.
+  ensureGlobalUndiciEnvProxyDispatcher();
   ensureGlobalUndiciStreamTimeouts();
 
   log.debug(
@@ -1537,6 +1543,7 @@ export async function runEmbeddedAttempt(
         toolMetas,
         unsubscribe,
         waitForCompactionRetry,
+        isCompactionInFlight,
         getMessagingToolSentTexts,
         getMessagingToolSentMediaUrls,
         getMessagingToolSentTargets,
@@ -1766,6 +1773,8 @@ export async function runEmbeddedAttempt(
                   sessionId: params.sessionId,
                   workspaceDir: params.workspaceDir,
                   messageProvider: params.messageProvider ?? undefined,
+                  trigger: params.trigger,
+                  channelId: params.messageChannel ?? params.messageProvider ?? undefined,
                 },
               )
               .catch((err) => {
@@ -1798,6 +1807,7 @@ export async function runEmbeddedAttempt(
         // Only trust snapshot if compaction wasn't running before or after capture
         const preCompactionSnapshot = wasCompactingBefore || wasCompactingAfter ? null : snapshot;
         const preCompactionSessionId = activeSession.sessionId;
+        const COMPACTION_RETRY_AGGREGATE_TIMEOUT_MS = 60_000;
 
         try {
           // Flush buffered block replies before waiting for compaction so the
@@ -1808,7 +1818,21 @@ export async function runEmbeddedAttempt(
             await params.onBlockReplyFlush();
           }
 
-          await abortable(waitForCompactionRetry());
+          const compactionRetryWait = await waitForCompactionRetryWithAggregateTimeout({
+            waitForCompactionRetry,
+            abortable,
+            aggregateTimeoutMs: COMPACTION_RETRY_AGGREGATE_TIMEOUT_MS,
+            isCompactionStillInFlight: isCompactionInFlight,
+          });
+          if (compactionRetryWait.timedOut) {
+            timedOutDuringCompaction = true;
+            if (!isProbeSession) {
+              log.warn(
+                `compaction retry aggregate timeout (${COMPACTION_RETRY_AGGREGATE_TIMEOUT_MS}ms): ` +
+                  `proceeding with pre-compaction state runId=${params.runId} sessionId=${params.sessionId}`,
+              );
+            }
+          }
         } catch (err) {
           if (isRunnerAbortError(err)) {
             if (!promptError) {
@@ -1960,6 +1984,8 @@ export async function runEmbeddedAttempt(
                 sessionId: params.sessionId,
                 workspaceDir: params.workspaceDir,
                 messageProvider: params.messageProvider ?? undefined,
+                trigger: params.trigger,
+                channelId: params.messageChannel ?? params.messageProvider ?? undefined,
               },
             )
             .catch((err) => {
@@ -2020,6 +2046,8 @@ export async function runEmbeddedAttempt(
               sessionId: params.sessionId,
               workspaceDir: params.workspaceDir,
               messageProvider: params.messageProvider ?? undefined,
+              trigger: params.trigger,
+              channelId: params.messageChannel ?? params.messageProvider ?? undefined,
             },
           )
           .catch((err) => {

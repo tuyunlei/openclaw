@@ -45,11 +45,11 @@ import {
   type TurnLatencyStats,
 } from "./manager.types.js";
 import {
+  canonicalizeAcpSessionKey,
   createUnsupportedControlError,
   hasLegacyAcpIdentityProjection,
   normalizeAcpErrorCode,
   normalizeActorKey,
-  normalizeSessionKey,
   requireReadySessionMeta,
   resolveAcpAgentFromSessionKey,
   resolveAcpSessionResolutionError,
@@ -95,7 +95,7 @@ export class AcpSessionManager {
   constructor(private readonly deps: AcpSessionManagerDeps = DEFAULT_DEPS) {}
 
   resolveSession(params: { cfg: OpenClawConfig; sessionKey: string }): AcpSessionResolution {
-    const sessionKey = normalizeSessionKey(params.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey(params);
     if (!sessionKey) {
       return {
         kind: "none",
@@ -221,7 +221,10 @@ export class AcpSessionManager {
     handle: AcpRuntimeHandle;
     meta: SessionAcpMeta;
   }> {
-    const sessionKey = normalizeSessionKey(input.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey({
+      cfg: input.cfg,
+      sessionKey: input.sessionKey,
+    });
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
     }
@@ -242,6 +245,7 @@ export class AcpSessionManager {
             sessionKey,
             agent,
             mode: input.mode,
+            resumeSessionId: input.resumeSessionId,
             cwd: requestedCwd,
           }),
         fallbackCode: "ACP_SESSION_INIT_FAILED",
@@ -328,7 +332,7 @@ export class AcpSessionManager {
     sessionKey: string;
     signal?: AbortSignal;
   }): Promise<AcpSessionStatus> {
-    const sessionKey = normalizeSessionKey(params.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey(params);
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
     }
@@ -404,7 +408,7 @@ export class AcpSessionManager {
     sessionKey: string;
     runtimeMode: string;
   }): Promise<AcpSessionRuntimeOptions> {
-    const sessionKey = normalizeSessionKey(params.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey(params);
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
     }
@@ -459,7 +463,7 @@ export class AcpSessionManager {
     key: string;
     value: string;
   }): Promise<AcpSessionRuntimeOptions> {
-    const sessionKey = normalizeSessionKey(params.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey(params);
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
     }
@@ -532,7 +536,7 @@ export class AcpSessionManager {
     sessionKey: string;
     patch: Partial<AcpSessionRuntimeOptions>;
   }): Promise<AcpSessionRuntimeOptions> {
-    const sessionKey = normalizeSessionKey(params.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey(params);
     const validatedPatch = validateRuntimeOptionPatch(params.patch);
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
@@ -562,7 +566,7 @@ export class AcpSessionManager {
     cfg: OpenClawConfig;
     sessionKey: string;
   }): Promise<AcpSessionRuntimeOptions> {
-    const sessionKey = normalizeSessionKey(params.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey(params);
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
     }
@@ -598,7 +602,10 @@ export class AcpSessionManager {
   }
 
   async runTurn(input: AcpRunTurnInput): Promise<void> {
-    const sessionKey = normalizeSessionKey(input.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey({
+      cfg: input.cfg,
+      sessionKey: input.sessionKey,
+    });
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
     }
@@ -664,6 +671,7 @@ export class AcpSessionManager {
         for await (const event of runtime.runTurn({
           handle,
           text: input.text,
+          attachments: input.attachments,
           mode: input.mode,
           requestId: input.requestId,
           signal: combinedSignal,
@@ -765,7 +773,7 @@ export class AcpSessionManager {
     sessionKey: string;
     reason?: string;
   }): Promise<void> {
-    const sessionKey = normalizeSessionKey(params.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey(params);
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
     }
@@ -833,7 +841,10 @@ export class AcpSessionManager {
   }
 
   async closeSession(input: AcpCloseSessionInput): Promise<AcpCloseSessionResult> {
-    const sessionKey = normalizeSessionKey(input.sessionKey);
+    const sessionKey = canonicalizeAcpSessionKey({
+      cfg: input.cfg,
+      sessionKey: input.sessionKey,
+    });
     if (!sessionKey) {
       throw new AcpRuntimeError("ACP_SESSION_INIT_FAILED", "ACP session key is required.");
     }
