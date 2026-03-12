@@ -209,7 +209,7 @@ export function buildGatewayCronService(params: {
       (opts?.sessionKey
         ? normalizeAgentId(resolveAgentIdFromSessionKey(opts.sessionKey))
         : undefined);
-    const agentId = derivedAgentId || undefined;
+    const agentId = derivedAgentId || resolveCronAgent(undefined).agentId;
     const sessionKey =
       opts?.sessionKey && agentId
         ? resolveCronSessionKey({
@@ -217,7 +217,7 @@ export function buildGatewayCronService(params: {
             agentId,
             requestedSessionKey: opts.sessionKey,
           })
-        : undefined;
+        : resolveAgentMainSessionKey({ cfg: runtimeConfig, agentId });
     return { runtimeConfig, agentId, sessionKey };
   };
 
