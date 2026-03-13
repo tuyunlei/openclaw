@@ -19,6 +19,7 @@ import { resolveSandboxRuntimeStatus } from "./sandbox/runtime-status.js";
 import {
   mapToolContextToSpawnedRunMetadata,
   normalizeSpawnedRunMetadata,
+  resolveSpawnedWorkspaceInheritance,
 } from "./spawned-context.js";
 import { buildSubagentSystemPrompt } from "./subagent-announce.js";
 import {
@@ -571,12 +572,17 @@ export async function spawnSubagentDirect(
     agentGroupSpace: ctx.agentGroupSpace,
     workspaceDir: ctx.workspaceDir,
   });
-  // Don't propagate parent workspace — let the runner resolve workspace from the
-  // child agent's own config (via resolveRunWorkspaceDir fallback).
-  const { workspaceDir: _parentWorkspace, ...groupMetadata } = toolSpawnMetadata;
   const spawnedMetadata = normalizeSpawnedRunMetadata({
     spawnedBy: spawnedByKey,
-    ...groupMetadata,
+    ...toolSpawnMetadata,
+    workspaceDir: resolveSpawnedWorkspaceInheritance({
+      config: cfg,
+      targetAgentId,
+      // For cross-agent spawns, ignore the caller's inherited workspace;
+      // let targetAgentId resolve the correct workspace instead.
+      explicitWorkspaceDir:
+        targetAgentId !== requesterAgentId ? undefined : toolSpawnMetadata.workspaceDir,
+    }),
   });
   const spawnLineagePatchError = await patchChildSession({
     spawnedBy: spawnedByKey,
