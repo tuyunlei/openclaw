@@ -649,6 +649,7 @@ export const MemorySearchSchema = z
           .object({
             deltaBytes: z.number().int().nonnegative().optional(),
             deltaMessages: z.number().int().nonnegative().optional(),
+            postCompactionForce: z.boolean().optional(),
           })
           .strict()
           .optional(),
@@ -756,6 +757,7 @@ export const AgentEntrySchema = z
       .strict()
       .optional(),
     sandbox: AgentSandboxSchema,
+    params: z.record(z.string(), z.unknown()).optional(),
     tools: AgentToolsSchema,
     runtime: AgentRuntimeSchema,
   })
