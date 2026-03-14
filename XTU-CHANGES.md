@@ -212,3 +212,4 @@ ACP 工作流、子代理调度、thread projection 等。
 | `3128fc881b` | 02-21 00:15 | Merge feat/delivery-logs into xtu/develop                                        |
 | `0bf17d477b` | 03-09       | fix: pass cwd param to subagent spawn workspaceDir                               |
 | `e808b55140` | 03-14       | diag: add OAuth refresh failure logging for multi-agent token conflict detection |
+| `925a22476d` | 03-14       | fix: update Pi SDK patch for generateSummary onPayload (v0.57.1 compat)          |
