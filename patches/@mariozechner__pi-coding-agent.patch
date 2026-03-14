@@ -24,12 +24,13 @@ index 0889a4f3ec1df3c94362851613edcb08850b6658..74bf8c80ab3258a4e51e9a4c6ad1984e
      const maxTokens = Math.floor(0.8 * reserveTokens);
      // Use update prompt if we have a previous summary, otherwise initial prompt
      let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
-@@ -444,7 +444,7 @@ export async function generateSummary(currentMessages, model, reserveTokens, api
-             timestamp: Date.now(),
-         },
+@@ -447,7 +447,8 @@ export async function generateSummary(currentMessages, model, reserveTokens, api
      ];
--    const response = await completeSimple(model, { systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages }, { maxTokens, signal, apiKey, reasoning: "high" });
-+    const response = await completeSimple(model, { systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages }, { maxTokens, signal, apiKey, reasoning: "high", onPayload: options?.onPayload });
+     const completionOptions = model.reasoning
+-        ? { maxTokens, signal, apiKey, reasoning: "high" }
+-        : { maxTokens, signal, apiKey };
++        ? { maxTokens, signal, apiKey, reasoning: "high", onPayload: options?.onPayload }
++        : { maxTokens, signal, apiKey, onPayload: options?.onPayload };
+     const response = await completeSimple(model, { systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages }, completionOptions);
      if (response.stopReason === "error") {
          throw new Error(`Summarization failed: ${response.errorMessage || "Unknown error"}`);
-     }
