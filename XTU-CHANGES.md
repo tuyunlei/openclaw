@@ -193,21 +193,22 @@ ACP 工作流、子代理调度、thread projection 等。
 
 上游同步和分支合并（不含功能代码）。
 
-| Hash         | 时间        | 摘要                                                              |
-| ------------ | ----------- | ----------------------------------------------------------------- |
-| `110932afcf` | 03-06 10:06 | Merge branch 'xtu/main' into xtu/develop                          |
-| `bfb5d70250` | 03-06 02:01 | Merge remote-tracking branch 'tuyunlei/xtu/main' into xtu/develop |
-| `f2ce6cbbe4` | 03-06 01:11 | Merge branch 'xtu/main' into xtu/develop                          |
-| `186b861700` | 03-04 13:51 | merge: origin/main (1305 commits) into xtu/develop                |
-| `08b17b2c76` | 03-04 10:44 | Merge feature/acp-thread-projection into xtu/develop              |
-| `d43ffe5599` | 03-01 22:20 | merge: origin/main (178 commits) into xtu/main                    |
-| `6519db3856` | 02-27 18:17 | merge: origin/main (417 commits) into xtu/develop                 |
-| `30284f67a3` | 02-27 18:26 | docs: update CHANGELOG for 2026.2.27                              |
-| `ec981715e4` | 02-25 14:47 | Merge branch 'xtu/develop' into xtu/main                          |
-| `c5abb6027b` | 02-26 11:05 | Merge origin/main into xtu/develop (491 commits)                  |
-| `9b21ce865c` | 02-24 12:22 | merge: main → xtu/main（上游同步）                                |
-| `0cae29077f` | 02-24 11:07 | Merge feature/agent-owner-numbers into xtu/main                   |
-| `5d9e9e7d8f` | 02-22 13:47 | Merge xtu/develop into xtu/main                                   |
-| `b3562114ab` | 02-21 21:17 | Merge main into xtu/main（上游同步）                              |
-| `3128fc881b` | 02-21 00:15 | Merge feat/delivery-logs into xtu/develop                         |
-| `0bf17d477b` | 03-09       | fix: pass cwd param to subagent spawn workspaceDir                |
+| Hash         | 时间        | 摘要                                                                             |
+| ------------ | ----------- | -------------------------------------------------------------------------------- |
+| `110932afcf` | 03-06 10:06 | Merge branch 'xtu/main' into xtu/develop                                         |
+| `bfb5d70250` | 03-06 02:01 | Merge remote-tracking branch 'tuyunlei/xtu/main' into xtu/develop                |
+| `f2ce6cbbe4` | 03-06 01:11 | Merge branch 'xtu/main' into xtu/develop                                         |
+| `186b861700` | 03-04 13:51 | merge: origin/main (1305 commits) into xtu/develop                               |
+| `08b17b2c76` | 03-04 10:44 | Merge feature/acp-thread-projection into xtu/develop                             |
+| `d43ffe5599` | 03-01 22:20 | merge: origin/main (178 commits) into xtu/main                                   |
+| `6519db3856` | 02-27 18:17 | merge: origin/main (417 commits) into xtu/develop                                |
+| `30284f67a3` | 02-27 18:26 | docs: update CHANGELOG for 2026.2.27                                             |
+| `ec981715e4` | 02-25 14:47 | Merge branch 'xtu/develop' into xtu/main                                         |
+| `c5abb6027b` | 02-26 11:05 | Merge origin/main into xtu/develop (491 commits)                                 |
+| `9b21ce865c` | 02-24 12:22 | merge: main → xtu/main（上游同步）                                               |
+| `0cae29077f` | 02-24 11:07 | Merge feature/agent-owner-numbers into xtu/main                                  |
+| `5d9e9e7d8f` | 02-22 13:47 | Merge xtu/develop into xtu/main                                                  |
+| `b3562114ab` | 02-21 21:17 | Merge main into xtu/main（上游同步）                                             |
+| `3128fc881b` | 02-21 00:15 | Merge feat/delivery-logs into xtu/develop                                        |
+| `0bf17d477b` | 03-09       | fix: pass cwd param to subagent spawn workspaceDir                               |
+| `e808b55140` | 03-14       | diag: add OAuth refresh failure logging for multi-agent token conflict detection |
