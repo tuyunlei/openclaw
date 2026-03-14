@@ -207,12 +207,25 @@ async function refreshOAuthTokenWithLock(params: {
               if (!oauthProvider) {
                 return null;
               }
-              return await getOAuthApiKey(oauthProvider, oauthCreds);
+              try {
+                return await getOAuthApiKey(oauthProvider, oauthCreds);
+              } catch (refreshErr) {
+                log.warn("OAuth refresh request failed", {
+                  profileId: params.profileId,
+                  provider: cred.provider,
+                  refreshTokenPrefix: oldRefreshPrefix,
+                  agentDir: params.agentDir ?? "(main)",
+                  error: refreshErr instanceof Error ? refreshErr.message : String(refreshErr),
+                });
+                throw refreshErr;
+              }
             })();
     if (!result) {
       log.warn("OAuth refresh returned null", {
         profileId: params.profileId,
         provider: cred.provider,
+        refreshTokenPrefix: oldRefreshPrefix,
+        agentDir: params.agentDir ?? "(main)",
       });
       return null;
     }
@@ -432,9 +445,23 @@ export async function resolveApiKeyForProfile(
       email: cred.email,
     });
   } catch (error) {
+    const refreshTokenPrefix =
+      (oauthCred as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)";
+    log.warn("OAuth refresh failed for profile", {
+      profileId,
+      provider: cred.provider,
+      refreshTokenPrefix,
+      agentDir: params.agentDir ?? "(main)",
+      error: error instanceof Error ? error.message : String(error),
+    });
     const refreshedStore = ensureAuthProfileStore(params.agentDir);
     const refreshed = refreshedStore.profiles[profileId];
     if (refreshed?.type === "oauth" && Date.now() < refreshed.expires) {
+      log.info("OAuth refresh failed but found valid token from concurrent refresh", {
+        profileId,
+        agentDir: params.agentDir ?? "(main)",
+        expires: new Date(refreshed.expires).toISOString(),
+      });
       return buildOAuthProfileResult({
         provider: refreshed.provider,
         credentials: refreshed,
