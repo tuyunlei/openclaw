@@ -23,7 +23,7 @@ packageExtensionsChecksum: sha256-n+P/SQo4Pf+dHYpYn1Y6wL4cJEVoVzZ835N0OEp4TM8=
 
 patchedDependencies:
   '@mariozechner/pi-coding-agent':
-    hash: a1691ffffe1197ec62b9adea8bb4750f0a2ab01679ab855a6ae9f07378d079a1
+    hash: eac9f77d5e982970e01158ba7fbe998de17930951e5131adbf831958f399d9f7
     path: patches/@mariozechner__pi-coding-agent.patch
 
 importers:
@@ -71,7 +71,7 @@ importers:
         version: 0.57.1(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-coding-agent':
         specifier: 0.57.1
-        version: 0.57.1(patch_hash=a1691ffffe1197ec62b9adea8bb4750f0a2ab01679ab855a6ae9f07378d079a1)(ws@8.19.0)(zod@4.3.6)
+        version: 0.57.1(patch_hash=eac9f77d5e982970e01158ba7fbe998de17930951e5131adbf831958f399d9f7)(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-tui':
         specifier: 0.57.1
         version: 0.57.1
@@ -9066,7 +9066,7 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-coding-agent@0.57.1(patch_hash=a1691ffffe1197ec62b9adea8bb4750f0a2ab01679ab855a6ae9f07378d079a1)(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-coding-agent@0.57.1(patch_hash=eac9f77d5e982970e01158ba7fbe998de17930951e5131adbf831958f399d9f7)(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@mariozechner/jiti': 2.6.5
       '@mariozechner/pi-agent-core': 0.57.1(ws@8.19.0)(zod@4.3.6)
@@ -13517,7 +13517,7 @@ snapshots:
       '@lydell/node-pty': 1.2.0-beta.3
       '@mariozechner/pi-agent-core': 0.57.1(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-ai': 0.57.1(ws@8.19.0)(zod@4.3.6)
-      '@mariozechner/pi-coding-agent': 0.57.1(patch_hash=a1691ffffe1197ec62b9adea8bb4750f0a2ab01679ab855a6ae9f07378d079a1)(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-coding-agent': 0.57.1(patch_hash=eac9f77d5e982970e01158ba7fbe998de17930951e5131adbf831958f399d9f7)(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-tui': 0.57.1
       '@mozilla/readability': 0.6.0
       '@napi-rs/canvas': 0.1.95

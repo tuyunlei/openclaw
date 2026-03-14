@@ -12,7 +12,7 @@ index ecfcfbdda13eb050f24ad0ab9ffb24f451f433e5..8281a97bac8590b322b9c03ac32997b1
      /** UUID of first entry to keep */
      firstKeptEntryId: string;
 diff --git a/dist/core/compaction/compaction.js b/dist/core/compaction/compaction.js
-index 0889a4f3ec1df3c94362851613edcb08850b6658..74bf8c80ab3258a4e51e9a4c6ad1984e0fe24767 100644
+index 9a20125dccea0094e70ff3cad375d783069f0a6f..ad747d447ff9202429c9b317b14f94014d0d87ee 100644
 --- a/dist/core/compaction/compaction.js
 +++ b/dist/core/compaction/compaction.js
 @@ -420,7 +420,7 @@ Keep each section concise. Preserve exact file paths, function names, and error
@@ -24,7 +24,8 @@ index 0889a4f3ec1df3c94362851613edcb08850b6658..74bf8c80ab3258a4e51e9a4c6ad1984e
      const maxTokens = Math.floor(0.8 * reserveTokens);
      // Use update prompt if we have a previous summary, otherwise initial prompt
      let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
-@@ -447,7 +447,8 @@ export async function generateSummary(currentMessages, model, reserveTokens, api
+@@ -445,8 +445,8 @@ export async function generateSummary(currentMessages, model, reserveTokens, api
+         },
      ];
      const completionOptions = model.reasoning
 -        ? { maxTokens, signal, apiKey, reasoning: "high" }

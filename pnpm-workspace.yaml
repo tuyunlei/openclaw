@@ -15,3 +15,5 @@ onlyBuiltDependencies:
   - node-llama-cpp
   - protobufjs
   - sharp
+
+ignorePatchFailures: false
