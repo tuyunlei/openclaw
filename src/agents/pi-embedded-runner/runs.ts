@@ -12,6 +12,12 @@ type EmbeddedPiQueueHandle = {
   abort: () => void;
 };
 
+export type ActiveEmbeddedRunSnapshot = {
+  transcriptLeafId: string | null;
+  messages?: unknown[];
+  inFlightPrompt?: string;
+};
+
 // Map sessionKey -> sessionId for fast lookup from channel handlers
 const SESSION_KEY_TO_ID = new Map<string, string>();
 type EmbeddedRunWaiter = {
@@ -27,9 +33,11 @@ const EMBEDDED_RUN_STATE_KEY = Symbol.for("openclaw.embeddedRunState");
 
 const embeddedRunState = resolveGlobalSingleton(EMBEDDED_RUN_STATE_KEY, () => ({
   activeRuns: new Map<string, EmbeddedPiQueueHandle>(),
+  snapshots: new Map<string, ActiveEmbeddedRunSnapshot>(),
   waiters: new Map<string, Set<EmbeddedRunWaiter>>(),
 }));
 const ACTIVE_EMBEDDED_RUNS = embeddedRunState.activeRuns;
+const ACTIVE_EMBEDDED_RUN_SNAPSHOTS = embeddedRunState.snapshots;
 const EMBEDDED_RUN_WAITERS = embeddedRunState.waiters;
 
 export function queueEmbeddedPiMessage(sessionId: string, text: string): boolean {
@@ -164,6 +172,12 @@ export function getActiveEmbeddedRunCount(): number {
   return ACTIVE_EMBEDDED_RUNS.size;
 }
 
+export function getActiveEmbeddedRunSnapshot(
+  sessionId: string,
+): ActiveEmbeddedRunSnapshot | undefined {
+  return ACTIVE_EMBEDDED_RUN_SNAPSHOTS.get(sessionId);
+}
+
 /**
  * Wait for active embedded runs to drain.
  *
@@ -265,6 +279,16 @@ export function setActiveEmbeddedRun(
   }
 }
 
+export function updateActiveEmbeddedRunSnapshot(
+  sessionId: string,
+  snapshot: ActiveEmbeddedRunSnapshot,
+) {
+  if (!ACTIVE_EMBEDDED_RUNS.has(sessionId)) {
+    return;
+  }
+  ACTIVE_EMBEDDED_RUN_SNAPSHOTS.set(sessionId, snapshot);
+}
+
 export function clearActiveEmbeddedRun(
   sessionId: string,
   handle: EmbeddedPiQueueHandle,
@@ -272,6 +296,7 @@ export function clearActiveEmbeddedRun(
 ) {
   if (ACTIVE_EMBEDDED_RUNS.get(sessionId) === handle) {
     ACTIVE_EMBEDDED_RUNS.delete(sessionId);
+    ACTIVE_EMBEDDED_RUN_SNAPSHOTS.delete(sessionId);
     // Clear sessionKey mapping
     if (sessionKey) {
       SESSION_KEY_TO_ID.delete(sessionKey);
@@ -296,6 +321,7 @@ export const __testing = {
     }
     EMBEDDED_RUN_WAITERS.clear();
     ACTIVE_EMBEDDED_RUNS.clear();
+    ACTIVE_EMBEDDED_RUN_SNAPSHOTS.clear();
   },
 };
 

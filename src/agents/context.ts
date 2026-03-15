@@ -108,20 +108,25 @@ function getCommandPathFromArgv(argv: string[]): string[] {
   return tokens;
 }
 
+const SKIP_EAGER_WARMUP_PRIMARY_COMMANDS = new Set([
+  "backup",
+  "completion",
+  "config",
+  "directory",
+  "doctor",
+  "health",
+  "hooks",
+  "logs",
+  "plugins",
+  "secrets",
+  "system",
+  "update",
+  "webhooks",
+]);
+
 function shouldSkipEagerContextWindowWarmup(argv: string[] = process.argv): boolean {
-  const [primary, secondary] = getCommandPathFromArgv(argv);
-  if (primary === "config" && secondary === "validate") {
-    return true;
-  }
-  // Skip eager warmup for `system` CLI commands (event, heartbeat, presence).
-  // These are pure gateway RPC calls that never use model context windows.
-  // The warmup triggers loadOpenClawPlugins → plugin init, which can block
-  // the event loop for seconds and cause WS handshake timeouts (the gateway
-  // server times out at 3s while the client is still loading plugins).
-  if (primary === "system") {
-    return true;
-  }
-  return false;
+  const [primary] = getCommandPathFromArgv(argv);
+  return primary ? SKIP_EAGER_WARMUP_PRIMARY_COMMANDS.has(primary) : false;
 }
 
 function primeConfiguredContextWindows(): OpenClawConfig | undefined {
