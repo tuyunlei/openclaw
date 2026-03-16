@@ -353,8 +353,7 @@ export function resolveCommandAuthorization(params: {
     Array.isArray(ctx.GatewayClientScopes) &&
     ctx.GatewayClientScopes.includes("operator.admin");
   const ownerAllowlistConfigured = ownerAllowAll || explicitOwners.length > 0;
-  const senderIsOwner =
-    senderIsOwnerByOverride || senderIsOwnerByIdentity || senderIsOwnerByScope || ownerAllowAll;
+  const senderIsOwner = senderIsOwnerByOverride || senderIsOwnerByIdentity || senderIsOwnerByScope || ownerAllowAll;
   const requireOwner = enforceOwner || ownerAllowlistConfigured;
   const isOwnerForCommands = !requireOwner
     ? true
@@ -388,50 +387,4 @@ export function resolveCommandAuthorization(params: {
     from: from || undefined,
     to: to || undefined,
   };
-}
-
-/**
- * Resolves owner numbers for a channel without requiring a full MsgContext.
- * Used by gateway agent and cron paths that bypass the normal message flow.
- */
-export function resolveOwnerNumbersForChannel(params: {
-  cfg: OpenClawConfig;
-  messageChannel?: string | null;
-  accountId?: string | null;
-}): string[] | undefined {
-  const { cfg, accountId } = params;
-  const providerId = normalizeAnyChannelId(params.messageChannel ?? undefined) ?? undefined;
-  const dock = providerId ? getChannelDock(providerId) : undefined;
-
-  const configOwnerAllowFromList = resolveOwnerAllowFromList({
-    dock,
-    cfg,
-    accountId,
-    providerId,
-    allowFrom: cfg.commands?.ownerAllowFrom,
-  });
-
-  const allowFromRaw = dock?.config?.resolveAllowFrom
-    ? dock.config.resolveAllowFrom({ cfg, accountId })
-    : [];
-  const allowFromList = formatAllowFromList({
-    dock,
-    cfg,
-    accountId,
-    allowFrom: Array.isArray(allowFromRaw) ? allowFromRaw : [],
-  });
-
-  const allowAll =
-    allowFromList.length === 0 || allowFromList.some((entry) => entry.trim() === "*");
-  const ownerCandidatesForCommands = allowAll ? [] : allowFromList.filter((entry) => entry !== "*");
-
-  const ownerAllowAll = configOwnerAllowFromList.some((entry) => entry.trim() === "*");
-  const explicitOwners = configOwnerAllowFromList.filter((entry) => entry !== "*");
-  const ownerList = Array.from(
-    new Set(
-      explicitOwners.length > 0 ? explicitOwners : ownerAllowAll ? [] : ownerCandidatesForCommands,
-    ),
-  );
-
-  return ownerList.length > 0 ? ownerList : undefined;
 }
