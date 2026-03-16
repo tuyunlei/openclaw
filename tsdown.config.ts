@@ -130,6 +130,13 @@ function buildCoreDistEntries(): Record<string, string> {
     "line/accounts": "src/line/accounts.ts",
     "line/send": "src/line/send.ts",
     "line/template-messages": "src/line/template-messages.ts",
+    // Build plugin runtime as a standalone file so the plugin loader can find
+    // it at dist/plugins/runtime/index.js instead of falling back to jiti-compiling
+    // the source .ts (which takes 3+ minutes on CPU-constrained hardware).
+    // Upstream #28587 — stage-bundled-plugin-runtime only mirrors dist/ to dist-runtime/,
+    // it does not produce this standalone entry. Without it, resolvePluginRuntimeModulePath
+    // falls back to src/ and triggers a full jiti compilation storm.
+    "plugins/runtime/index": "src/plugins/runtime/index.ts",
   };
 }
 
