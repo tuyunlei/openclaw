@@ -172,6 +172,27 @@ async function resolveCronDeliveryContext(params: {
   deliveryContract: IsolatedDeliveryContract;
 }) {
   const deliveryPlan = resolveCronDeliveryPlan(params.job);
+  if (!deliveryPlan.requested) {
+    const resolvedDelivery = {
+      ok: false as const,
+      channel: undefined,
+      to: undefined,
+      accountId: undefined,
+      threadId: undefined,
+      mode: "implicit" as const,
+      error: new Error("cron delivery not requested"),
+    };
+    return {
+      deliveryPlan,
+      deliveryRequested: false,
+      resolvedDelivery,
+      toolPolicy: resolveCronToolPolicy({
+        deliveryRequested: false,
+        resolvedDelivery,
+        deliveryContract: params.deliveryContract,
+      }),
+    };
+  }
   const resolvedDelivery = await resolveDeliveryTarget(params.cfg, params.agentId, {
     channel: deliveryPlan.channel ?? "last",
     to: deliveryPlan.to,
@@ -602,6 +623,9 @@ export async function runCronIsolatedAgentTurn(params: {
             sessionKey: agentSessionKey,
             agentId,
             trigger: "cron",
+            // Cron runs execute inside the gateway process and need the same
+            // explicit subagent late-binding as other gateway-owned runners.
+            allowGatewaySubagentBinding: true,
             messageChannel,
             agentAccountId: resolvedDelivery.accountId,
             sessionFile,

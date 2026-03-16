@@ -364,6 +364,7 @@ export const registerTelegramNativeCommands = ({
   shouldSkipUpdate,
   opts,
 }: RegisterTelegramNativeCommandsParams) => {
+  const silentErrorReplies = telegramCfg.silentErrorReplies === true;
   const boundRoute =
     nativeEnabled && nativeSkillsEnabled
       ? resolveAgentRoute({ cfg, channel: "telegram", accountId })
@@ -733,7 +734,6 @@ export const registerTelegramNativeCommands = ({
             typeof telegramCfg.blockStreaming === "boolean"
               ? !telegramCfg.blockStreaming
               : undefined;
-
           const deliveryState = {
             delivered: false,
             skippedNonSilent: 0,
@@ -765,6 +765,7 @@ export const registerTelegramNativeCommands = ({
                 const result = await deliverReplies({
                   replies: [payload],
                   ...deliveryBaseOptions,
+                  silent: silentErrorReplies && payload.isError === true,
                 });
                 if (result.delivered) {
                   deliveryState.delivered = true;
@@ -884,6 +885,7 @@ export const registerTelegramNativeCommands = ({
             await deliverReplies({
               replies: [result],
               ...deliveryBaseOptions,
+              silent: silentErrorReplies && result.isError === true,
             });
           }
         });
