@@ -665,13 +665,17 @@ export const FIELD_HELP: Record<string, string> = {
   "tools.message.broadcast.enabled": "Enable broadcast action (default: true).",
   "tools.web.search.enabled": "Enable the web_search tool (requires a provider API key).",
   "tools.web.search.provider":
-    'Search provider ("brave", "gemini", "grok", "kimi", or "perplexity"). Auto-detected from available API keys if omitted.',
+    'Search provider ("brave", "firecrawl", "gemini", "grok", "kimi", or "perplexity"). Auto-detected from available API keys if omitted.',
   "tools.web.search.apiKey": "Brave Search API key (fallback: BRAVE_API_KEY env var).",
   "tools.web.search.maxResults": "Number of results to return (1-10).",
   "tools.web.search.timeoutSeconds": "Timeout in seconds for web_search requests.",
   "tools.web.search.cacheTtlMinutes": "Cache TTL in minutes for web_search results.",
   "tools.web.search.brave.mode":
     'Brave Search mode: "web" (URL results) or "llm-context" (pre-extracted page content for LLM grounding).',
+  "tools.web.search.firecrawl.apiKey":
+    "Firecrawl API key for web search (fallback: FIRECRAWL_API_KEY env var).",
+  "tools.web.search.firecrawl.baseUrl":
+    'Firecrawl Search base URL override (default: "https://api.firecrawl.dev").',
   "tools.web.search.gemini.apiKey":
     "Gemini API key for Google Search grounding (fallback: GEMINI_API_KEY env var).",
   "tools.web.search.gemini.model": 'Gemini model override (default: "gemini-2.5-flash").',
@@ -1346,7 +1350,7 @@ export const FIELD_HELP: Record<string, string> = {
   "messages.groupChat":
     "Group-message handling controls including mention triggers and history window sizing. Keep mention patterns narrow so group channels do not trigger on every message.",
   "messages.groupChat.mentionPatterns":
-    "Regex-like patterns used to detect explicit mentions/trigger phrases in group chats. Use precise patterns to reduce false positives in high-volume channels.",
+    "Safe case-insensitive regex patterns used to detect explicit mentions/trigger phrases in group chats. Use precise patterns to reduce false positives in high-volume channels; invalid or unsafe nested-repetition patterns are ignored.",
   "messages.groupChat.historyLimit":
     "Maximum number of prior group messages loaded as context per turn for group sessions. Use higher values for richer continuity, or lower values for faster and cheaper responses.",
   "messages.queue":
