@@ -45,6 +45,7 @@ import { resolveTelegramTransport } from "./fetch.js";
 import { tagTelegramNetworkError } from "./network-errors.js";
 import { createTelegramSendChatActionHandler } from "./sendchataction-401-backoff.js";
 import { getTelegramSequentialKey } from "./sequential-key.js";
+import { createSteerMiddleware } from "./steer-middleware.js";
 import { createTelegramThreadBindingManager } from "./thread-bindings.js";
 
 export type TelegramBotOptions = {
@@ -294,6 +295,10 @@ export function createTelegramBot(opts: TelegramBotOptions) {
       }
     }
   });
+
+  // Steer middleware: inject messages into active runs BEFORE sequentialize blocks.
+  // Without this, steer mode degrades to followup (message waits for lock release).
+  bot.use(createSteerMiddleware(cfg));
 
   bot.use(sequentialize(getTelegramSequentialKey));
 
