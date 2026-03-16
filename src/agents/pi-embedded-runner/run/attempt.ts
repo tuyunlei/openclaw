@@ -1546,7 +1546,12 @@ export async function runEmbeddedAttempt(
     logToolSchemasForGoogle({ tools, provider: params.provider });
 
     const machineName = await getMachineDisplayName();
-    const runtimeChannel = normalizeMessageChannel(params.messageChannel ?? params.messageProvider);
+    // Strip synthetic channel names so they don't pollute the system prompt hash.
+    // See compact.ts for the full explanation.
+    const SYNTHETIC_CHANNELS = new Set(["heartbeat", "system-inject", "cron-event", "exec-event"]);
+    const rawChannel = normalizeMessageChannel(params.messageChannel ?? params.messageProvider);
+    const runtimeChannel =
+      rawChannel && !SYNTHETIC_CHANNELS.has(rawChannel) ? rawChannel : undefined;
     let runtimeCapabilities = runtimeChannel
       ? (resolveChannelCapabilities({
           cfg: params.config,

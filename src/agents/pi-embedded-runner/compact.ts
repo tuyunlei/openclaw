@@ -563,7 +563,13 @@ export async function compactEmbeddedPiSessionDirect(
     const allowedToolNames = collectAllowedToolNames({ tools });
     logToolSchemasForGoogle({ tools, provider });
     const machineName = await getMachineDisplayName();
-    const runtimeChannel = normalizeMessageChannel(params.messageChannel ?? params.messageProvider);
+    // Strip synthetic channel names (heartbeat, system-inject, cron-event, exec-event)
+    // so they don't get embedded in the system prompt. This ensures the system prompt
+    // hash is stable across trigger types, preserving Anthropic prompt cache hits.
+    const SYNTHETIC_CHANNELS = new Set(["heartbeat", "system-inject", "cron-event", "exec-event"]);
+    const rawChannel = normalizeMessageChannel(params.messageChannel ?? params.messageProvider);
+    const runtimeChannel =
+      rawChannel && !SYNTHETIC_CHANNELS.has(rawChannel) ? rawChannel : undefined;
     let runtimeCapabilities = runtimeChannel
       ? (resolveChannelCapabilities({
           cfg: params.config,
