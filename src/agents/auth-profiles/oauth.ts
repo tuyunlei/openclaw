@@ -259,7 +259,17 @@ async function refreshOAuthTokenWithLock(params: {
       ...result.newCredentials,
       type: "oauth",
     };
+    log.info("OAuth refresh: writing new token to disk", {
+      profileId: params.profileId,
+      agentDir: params.agentDir ?? "(main)",
+      newRefreshPrefix,
+      refreshRotated: oldRefreshPrefix !== newRefreshPrefix,
+    });
     saveAuthProfileStore(store, params.agentDir);
+    log.info("OAuth refresh: token saved to disk successfully", {
+      profileId: params.profileId,
+      agentDir: params.agentDir ?? "(main)",
+    });
 
     return result;
   });
@@ -430,6 +440,19 @@ export async function resolveApiKeyForProfile(
     }) ?? cred;
 
   if (Date.now() < oauthCred.expires) {
+    const ttlSec = Math.round((oauthCred.expires - Date.now()) / 1000);
+    // Log token usage with TTL so we can reconstruct the timeline on failures.
+    // Only log when TTL < 10 min to avoid spamming on every API call.
+    if (ttlSec < 600) {
+      const refreshPrefix = (oauthCred as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)";
+      log.info("OAuth token nearing expiry", {
+        profileId,
+        provider: cred.provider,
+        ttlSec,
+        refreshPrefix,
+        agentDir: params.agentDir ?? "(main)",
+      });
+    }
     return buildOAuthProfileResult({
       provider: oauthCred.provider,
       credentials: oauthCred,
