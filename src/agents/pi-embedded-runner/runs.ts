@@ -87,6 +87,20 @@ export function isEmbeddedPiRunActiveBySessionKey(sessionKey: string): boolean {
 }
 
 /**
+ * Find an active run whose sessionKey ends with the given suffix.
+ * Used by channel middleware that knows the chat/topic but not the agent id.
+ * Returns the full sessionKey if found, null otherwise.
+ */
+export function findActiveSessionKeyBySuffix(suffix: string): string | null {
+  for (const key of SESSION_KEY_TO_ID.keys()) {
+    if (key.endsWith(suffix)) {
+      return key;
+    }
+  }
+  return null;
+}
+
+/**
  * Abort embedded PI runs.
  *
  * - With a sessionId, aborts that single run.
