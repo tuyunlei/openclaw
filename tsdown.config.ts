@@ -127,6 +127,14 @@ export default defineConfig([
     entry: "src/infra/warning-filter.ts",
   }),
   nodeBuildConfig({
+    // Build plugin runtime as a standalone file so the plugin loader can find
+    // it at dist/plugins/runtime/index.js instead of falling back to jiti-compiling
+    // the source .ts (which takes 3+ minutes on CPU-constrained hardware).
+    entry: {
+      "plugins/runtime/index": "src/plugins/runtime/index.ts",
+    },
+  }),
+  nodeBuildConfig({
     // Keep sync lazy-runtime channel modules as concrete dist files.
     entry: {
       "channels/plugins/agent-tools/whatsapp-login":
