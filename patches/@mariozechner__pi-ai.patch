@@ -1,0 +1,13 @@
+diff --git a/dist/utils/oauth/index.js b/dist/utils/oauth/index.js
+index 33d5fce32294d22463206fa11196d9d1bb4e7d0f..ef0acdb9ae5b089d9ac95a51ff45cc7b3f913076 100644
+--- a/dist/utils/oauth/index.js
++++ b/dist/utils/oauth/index.js
+@@ -122,7 +122,7 @@ export async function getOAuthApiKey(providerId, credentials) {
+             creds = await provider.refreshToken(creds);
+         }
+         catch (_error) {
+-            throw new Error(`Failed to refresh OAuth token for ${providerId}`);
++            throw new Error(`Failed to refresh OAuth token for ${providerId}`, { cause: _error });
+         }
+     }
+     const apiKey = provider.getApiKey(creds);

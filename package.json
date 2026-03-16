@@ -487,7 +487,8 @@
       }
     },
     "patchedDependencies": {
-      "@mariozechner/pi-coding-agent": "patches/@mariozechner__pi-coding-agent.patch"
+      "@mariozechner/pi-coding-agent": "patches/@mariozechner__pi-coding-agent.patch",
+      "@mariozechner/pi-ai": "patches/@mariozechner__pi-ai.patch"
     }
   }
 }
