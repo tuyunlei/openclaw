@@ -210,12 +210,25 @@ async function refreshOAuthTokenWithLock(params: {
               try {
                 return await getOAuthApiKey(oauthProvider, oauthCreds);
               } catch (refreshErr) {
+                // Extract the full error chain: getOAuthApiKey wraps the Pi SDK error
+                // which contains HTTP status + response body from Anthropic's token endpoint.
+                const errMsg =
+                  refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+                const causeMsg =
+                  refreshErr instanceof Error && refreshErr.cause
+                    ? refreshErr.cause instanceof Error
+                      ? refreshErr.cause.message
+                      : JSON.stringify(refreshErr.cause)
+                    : undefined;
+                const stackTrace = refreshErr instanceof Error ? refreshErr.stack : undefined;
                 log.warn("OAuth refresh request failed", {
                   profileId: params.profileId,
                   provider: cred.provider,
                   refreshTokenPrefix: oldRefreshPrefix,
                   agentDir: params.agentDir ?? "(main)",
-                  error: refreshErr instanceof Error ? refreshErr.message : String(refreshErr),
+                  error: errMsg,
+                  cause: causeMsg,
+                  stack: stackTrace,
                 });
                 throw refreshErr;
               }
@@ -447,12 +460,22 @@ export async function resolveApiKeyForProfile(
   } catch (error) {
     const refreshTokenPrefix =
       (oauthCred as { refresh?: string }).refresh?.slice(0, 30) ?? "(none)";
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const causeMsg =
+      error instanceof Error && error.cause
+        ? error.cause instanceof Error
+          ? error.cause.message
+          : JSON.stringify(error.cause)
+        : undefined;
     log.warn("OAuth refresh failed for profile", {
       profileId,
       provider: cred.provider,
       refreshTokenPrefix,
       agentDir: params.agentDir ?? "(main)",
-      error: error instanceof Error ? error.message : String(error),
+      error: errMsg,
+      cause: causeMsg,
+      tokenExpiredAt: new Date(oauthCred.expires).toISOString(),
+      expiredAgoSec: Math.round((Date.now() - oauthCred.expires) / 1000),
     });
     const refreshedStore = ensureAuthProfileStore(params.agentDir);
     const refreshed = refreshedStore.profiles[profileId];
