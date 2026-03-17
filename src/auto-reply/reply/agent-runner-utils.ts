@@ -5,7 +5,12 @@ import type { ChannelId, ChannelThreadingToolContext } from "../../channels/plug
 import { normalizeAnyChannelId, normalizeChannelId } from "../../channels/registry.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { isReasoningTagProvider } from "../../utils/provider-utils.js";
-import { estimateUsageCost, formatTokenCount, formatUsd } from "../../utils/usage-format.js";
+import {
+  estimateUsageCost,
+  estimateWeeklyLimitPct,
+  formatTokenCount,
+  formatUsd,
+} from "../../utils/usage-format.js";
 import type { TemplateContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
 import { resolveOriginMessageProvider, resolveOriginMessageTo } from "./origin-routing.js";
@@ -105,6 +110,12 @@ export const formatResponseUsageLine = (params: {
     cacheWrite: number;
   };
   contextTokens?: number;
+  /** Extended fields for "full" mode footer. */
+  model?: string;
+  provider?: string;
+  authProfileId?: string;
+  reasoningLevel?: string;
+  sessionKey?: string;
 }): string | null => {
   const usage = params.usage;
   if (!usage) {
@@ -145,8 +156,11 @@ export const formatResponseUsageLine = (params: {
     if (!Number.isFinite(pct)) {
       return null;
     }
-    return `${pct.toFixed(0)}% ctx`;
+    return `${pct.toFixed(0)}%`;
   })();
+
+  // Context window size label (e.g. "1.0m").
+  const cwLabel = params.contextTokens ? formatTokenCount(params.contextTokens) : null;
 
   const cost =
     params.showCost && typeof input === "number" && typeof output === "number"
@@ -160,8 +174,53 @@ export const formatResponseUsageLine = (params: {
           cost: params.costConfig,
         })
       : undefined;
+
+  // Weekly limit percentage (Anthropic subscription credits).
+  const weeklyPct = estimateWeeklyLimitPct(usage, params.model);
+  const weeklyLabel =
+    weeklyPct != null ? `${weeklyPct < 0.01 ? "<0.01" : weeklyPct.toFixed(2)}% wk` : null;
+
+  // ── Build extended footer when model/provider info is available ──
+  if (params.model) {
+    const parts: string[] = [];
+    // ctx%/cw
+    if (contextLabel && cwLabel) {
+      parts.push(`${contextLabel}/${cwLabel}`);
+    } else if (contextLabel) {
+      parts.push(contextLabel);
+    }
+    // model
+    parts.push(params.model);
+    // provider:profile (avoid duplication when profileId already has provider prefix)
+    if (params.provider && params.authProfileId) {
+      const profileId = params.authProfileId;
+      if (profileId.startsWith(`${params.provider}:`)) {
+        parts.push(profileId);
+      } else {
+        parts.push(`${params.provider}:${profileId}`);
+      }
+    } else if (params.provider) {
+      parts.push(params.provider);
+    }
+    // thinking/reasoning level
+    if (params.reasoningLevel) {
+      parts.push(params.reasoningLevel);
+    }
+    // weekly limit %
+    if (weeklyLabel) {
+      parts.push(weeklyLabel);
+    }
+    let line = parts.join(" · ");
+    // session key on second line
+    if (params.sessionKey) {
+      line += `\n\`${params.sessionKey}\``;
+    }
+    return line;
+  }
+
+  // ── Default compact format (backwards compatible) ──
   const costLabel = params.showCost ? formatUsd(cost) : undefined;
-  const contextSuffix = contextLabel ? ` · ${contextLabel}` : "";
+  const contextSuffix = contextLabel ? ` · ${contextLabel} ctx` : "";
   const costSuffix = costLabel ? ` · est ${costLabel}` : "";
   return `Usage: ${inputLabel} in / ${outputLabel} out${cacheLabel}${contextSuffix}${costSuffix}`;
 };

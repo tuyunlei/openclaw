@@ -579,10 +579,16 @@ export async function runReplyAgent(params: {
         showCost,
         costConfig,
         contextTokens: totalTokens > 0 ? contextTokensUsed : undefined,
+        ...(responseUsageMode === "full"
+          ? {
+              model: modelUsed,
+              provider: providerUsed,
+              authProfileId: followupRun.run.authProfileId,
+              reasoningLevel: followupRun.run.reasoningLevel,
+              sessionKey,
+            }
+          : {}),
       });
-      if (formatted && responseUsageMode === "full" && sessionKey) {
-        formatted = `${formatted} · session \`${sessionKey}\``;
-      }
       if (formatted) {
         responseUsageLine = formatted;
       }

@@ -8,6 +8,53 @@ export type ModelCostConfig = {
   cacheWrite: number;
 };
 
+// ── Anthropic subscription credit rates (per token) ──────────────────────
+// cacheRead costs 0 credits for all models.
+const ANTHROPIC_CREDIT_RATES: Record<string, { input: number; output: number }> = {
+  opus: { input: 2 / 3, output: 10 / 3 },
+  sonnet: { input: 2 / 5, output: 2 },
+  haiku: { input: 1 / 15, output: 1 / 3 },
+};
+
+/** Max 20× weekly credit limit. */
+const WEEKLY_CREDIT_LIMIT = 83_300_000;
+
+/**
+ * Estimate this turn's credit consumption as a percentage of the weekly limit.
+ * Returns `null` for non-Anthropic models or when usage is unavailable.
+ *
+ * Credit formula: input × rate + cacheWrite × rate + output × rate.
+ * cacheRead is free (0 credits).
+ */
+export function estimateWeeklyLimitPct(
+  usage: NormalizedUsage | undefined,
+  model: string | undefined,
+): number | null {
+  if (!usage || !model) {
+    return null;
+  }
+  const modelLower = model.toLowerCase();
+  let tier: { input: number; output: number } | undefined;
+  for (const [key, rates] of Object.entries(ANTHROPIC_CREDIT_RATES)) {
+    if (modelLower.includes(key)) {
+      tier = rates;
+      break;
+    }
+  }
+  if (!tier) {
+    return null;
+  }
+  const input = typeof usage.input === "number" ? usage.input : 0;
+  const cacheWrite = typeof usage.cacheWrite === "number" ? usage.cacheWrite : 0;
+  const output = typeof usage.output === "number" ? usage.output : 0;
+  // cacheWrite costs the same as input for all Anthropic models.
+  const credits = (input + cacheWrite) * tier.input + output * tier.output;
+  if (!Number.isFinite(credits) || credits <= 0) {
+    return null;
+  }
+  return (credits / WEEKLY_CREDIT_LIMIT) * 100;
+}
+
 export type UsageTotals = {
   input?: number;
   output?: number;
