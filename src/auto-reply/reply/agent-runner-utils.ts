@@ -189,6 +189,11 @@ export const formatResponseUsageLine = (params: {
     } else if (contextLabel) {
       parts.push(contextLabel);
     }
+    // cache write
+    const cw = usage.cacheWrite;
+    if (typeof cw === "number" && cw > 0) {
+      parts.push(`${formatTokenCount(cw)} cw`);
+    }
     // model
     parts.push(params.model);
     // provider:profile (avoid duplication when profileId already has provider prefix)
