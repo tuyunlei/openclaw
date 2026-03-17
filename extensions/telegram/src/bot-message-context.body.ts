@@ -25,6 +25,7 @@ import type {
   TelegramTopicConfig,
 } from "../../../src/config/types.js";
 import { logVerbose } from "../../../src/globals.js";
+import { createInternalHookEvent, triggerInternalHook } from "../../../src/hooks/internal-hooks.js";
 import type { NormalizedAllowFrom } from "./bot-access.js";
 import { isSenderAllowed } from "./bot-access.js";
 import type {
@@ -258,6 +259,26 @@ export async function resolveTelegramInboundBody(params: {
   const effectiveWasMentioned = mentionGate.effectiveWasMentioned;
   if (isGroup && requireMention && canDetectMention && mentionGate.shouldSkip) {
     logger.info({ chatId, reason: "no-mention" }, "skipping group message");
+
+    // Fire internal hook so plugins can observe skipped messages (e.g. virtual IM capture).
+    // Fire-and-forget: never blocks the skip path.
+    const threadSuffix = resolvedThreadId != null ? `:topic:${resolvedThreadId}` : "";
+    triggerInternalHook(
+      createInternalHookEvent(
+        "message",
+        "skipped",
+        /* sessionKey */ `telegram:group:${chatId}${threadSuffix}`,
+        {
+          from: senderId,
+          content: rawBody,
+          channelId: "telegram",
+          conversationId: `telegram:group:${chatId}${threadSuffix}`,
+          messageId: typeof msg.message_id === "number" ? String(msg.message_id) : undefined,
+          timestamp: msg.date ? msg.date * 1000 : undefined,
+        },
+      ),
+    ).catch(() => {});
+
     recordPendingHistoryEntryIfEnabled({
       historyMap: groupHistories,
       historyKey: historyKey ?? "",
