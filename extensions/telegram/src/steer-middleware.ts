@@ -9,6 +9,7 @@
  */
 import {
   findActiveSessionKeyBySuffix,
+  isEmbeddedPiRunActiveBySessionKey,
   queueEmbeddedPiMessageBySessionKey,
 } from "../../../src/agents/pi-embedded-runner.js";
 import { isControlCommandMessage } from "../../../src/auto-reply/command-detection.js";
@@ -16,6 +17,29 @@ import { resolveQueueSettings } from "../../../src/auto-reply/reply/queue/settin
 import type { OpenClawConfig } from "../../../src/config/config.js";
 import { diagnosticLogger as diag } from "../../../src/logging/diagnostic.js";
 import { resolveTelegramForumThreadId } from "./bot/helpers.js";
+
+// Cache: Telegram chatKey ("chatId|topicId") → resolved sessionKey.
+// Populated after the first message for a chat completes routing.
+// Enables steer for sessions whose key doesn't contain the telegram path
+// (e.g. "agent:main:main" for the default main session).
+const CHAT_SESSION_CACHE = new Map<string, string>();
+
+/**
+ * Register a Telegram chat → sessionKey mapping for steer lookups.
+ * Call this after session routing is resolved (e.g. in bot-handlers after processMessage).
+ */
+export function registerTelegramSteerMapping(
+  chatId: number | string,
+  topicId: number | string | undefined,
+  sessionKey: string,
+): void {
+  const chatKey = topicId ? `${chatId}|${topicId}` : `${chatId}`;
+  CHAT_SESSION_CACHE.set(chatKey, sessionKey);
+}
+
+function buildChatKey(chatId: number | string, topicId: number | string | undefined): string {
+  return topicId ? `${chatId}|${topicId}` : `${chatId}`;
+}
 
 /**
  * Creates middleware that attempts to steer incoming messages into active runs
@@ -60,8 +84,18 @@ export function createSteerMiddleware(cfg: OpenClawConfig) {
       chatSuffix = `telegram:dm:${chatId}`;
     }
 
-    // Find any active run whose sessionKey ends with this chat suffix
-    const sessionKey = findActiveSessionKeyBySuffix(chatSuffix);
+    // Strategy 1: suffix match (works for topic sessions with telegram path in key)
+    let sessionKey = findActiveSessionKeyBySuffix(chatSuffix);
+
+    // Strategy 2: cache lookup (works for main session / non-telegram-path keys)
+    if (!sessionKey) {
+      const chatKey = buildChatKey(chatId, topicId);
+      const cachedKey = CHAT_SESSION_CACHE.get(chatKey);
+      if (cachedKey && isEmbeddedPiRunActiveBySessionKey(cachedKey)) {
+        sessionKey = cachedKey;
+      }
+    }
+
     if (!sessionKey) {
       return next();
     }

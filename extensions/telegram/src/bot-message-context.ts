@@ -31,6 +31,7 @@ import {
   resolveTelegramReactionVariant,
   resolveTelegramStatusReactionEmojis,
 } from "./status-reaction-variants.js";
+import { registerTelegramSteerMapping } from "./steer-middleware.js";
 
 export type {
   BuildTelegramMessageContextParams,
@@ -246,6 +247,10 @@ export const buildTelegramMessageContext = async ({
       ? resolveThreadSessionKeys({ baseSessionKey, threadId: `${chatId}:${dmThreadId}` })
       : null;
   const sessionKey = threadKeys?.sessionKey ?? baseSessionKey;
+  // Register chatId→sessionKey mapping for steer middleware lookups.
+  // Enables steer for sessions whose key doesn't contain the telegram path
+  // (e.g. "agent:main:main" for the default main session).
+  registerTelegramSteerMapping(chatId, resolvedThreadId, sessionKey);
   route = {
     ...route,
     sessionKey,
