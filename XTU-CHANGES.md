@@ -123,6 +123,7 @@ ACP 工作流、子代理调度、thread projection 等。
 
 | Hash         | 时间        | 摘要                                                                     |
 | ------------ | ----------- | ------------------------------------------------------------------------ |
+| `306e7f2421` | 03-17       | feat: extended usage footer (model/profile/thinking/weekly-limit)        |
 | `d79fabc262` | 03-09       | feat(agent-defaults): add responseUsageByChannel for per-channel control |
 | `74900d08e4` | 03-05 10:40 | fix(usage): restore context percentage in usage footer                   |
 | `7ad9a4e509` | 03-04 19:01 | fix(usage): fall back to config default for responseUsage                |
@@ -148,6 +149,7 @@ ACP 工作流、子代理调度、thread projection 等。
 
 | Hash         | 时间        | 摘要                                                                    |
 | ------------ | ----------- | ----------------------------------------------------------------------- |
+| `44744c38d9` | 03-17       | feat: fire message:skipped internal hook on requireMention skip         |
 | `ffac73ebe9` | 03-03 23:07 | fix(skills): resolve chokidar v5 glob incompatibility                   |
 | `d4af0baaa5` | 03-05 11:06 | fix(feishu): remove duplicate replyInThread property from config schema |
 | `5d333c5d13` | 02-18 05:32 | feat(telegram): 添加 steer middleware，支持向活跃 run 注入消息          |
