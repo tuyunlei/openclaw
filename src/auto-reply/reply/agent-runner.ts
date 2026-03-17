@@ -583,7 +583,8 @@ export async function runReplyAgent(params: {
           ? {
               model: modelUsed,
               provider: providerUsed,
-              authProfileId: followupRun.run.authProfileId,
+              authProfileId:
+                runResult.meta?.agentMeta?.authProfileId ?? followupRun.run.authProfileId,
               thinkLevel: followupRun.run.thinkLevel,
               sessionKey,
             }

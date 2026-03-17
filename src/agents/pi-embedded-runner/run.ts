@@ -718,7 +718,7 @@ export async function runEmbeddedPiAgent(
           authStorage.setRuntimeApiKey(runtimeModel.provider, apiKeyInfo.apiKey);
           runtimeAuthState = null;
         }
-        lastProfileId = apiKeyInfo.profileId;
+        lastProfileId = resolvedProfileId;
       };
 
       const advanceAuthProfile = async (): Promise<boolean> => {
@@ -1632,6 +1632,7 @@ export async function runEmbeddedPiAgent(
             sessionId: sessionIdUsed,
             provider: lastAssistant?.provider ?? provider,
             model: lastAssistant?.model ?? model.id,
+            authProfileId: lastProfileId,
             usage,
             lastCallUsage: lastCallUsage ?? undefined,
             promptTokens,

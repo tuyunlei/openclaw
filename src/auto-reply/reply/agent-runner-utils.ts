@@ -185,7 +185,7 @@ export const formatResponseUsageLine = (params: {
     const parts: string[] = [];
     // ctx%/cw
     if (contextLabel && cwLabel) {
-      parts.push(`${contextLabel}/${cwLabel}`);
+      parts.push(`${contextLabel} / ${cwLabel}`);
     } else if (contextLabel) {
       parts.push(contextLabel);
     }

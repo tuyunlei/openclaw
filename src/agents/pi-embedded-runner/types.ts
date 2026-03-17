@@ -5,6 +5,8 @@ export type EmbeddedPiAgentMeta = {
   sessionId: string;
   provider: string;
   model: string;
+  /** The auth profile actually used by the final successful attempt (after fallback/rotation). */
+  authProfileId?: string;
   compactionCount?: number;
   promptTokens?: number;
   usage?: {
