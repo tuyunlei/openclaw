@@ -1763,8 +1763,10 @@ describe("runReplyAgent response usage footer", () => {
     const sessionKey = "agent:main:whatsapp:dm:+1000";
     const res = await createRun({ responseUsage: "full", sessionKey });
     const payload = Array.isArray(res) ? res[0] : res;
-    expect(String(payload?.text ?? "")).toContain("Usage:");
-    expect(String(payload?.text ?? "")).toContain(`· session \`${sessionKey}\``);
+    // Full mode uses extended footer format (no "Usage:" prefix).
+    // It includes model name and session key.
+    expect(String(payload?.text ?? "")).toContain("claude");
+    expect(String(payload?.text ?? "")).toContain(`\`${sessionKey}\``);
   });
 
   it("does not append session key when responseUsage=tokens", async () => {
