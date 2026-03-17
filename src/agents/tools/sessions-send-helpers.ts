@@ -58,14 +58,19 @@ export function resolveAnnounceTargetFromKey(sessionKey: string): AnnounceTarget
     if (normalizedChannel === "discord" || normalizedChannel === "slack") {
       return `channel:${id}`;
     }
-    return kind === "channel" ? `channel:${id}` : `group:${id}`;
+    // Include channel prefix so normalizeTarget can strip it properly.
+    // e.g. Telegram's stripTelegramInternalPrefixes needs "telegram:" before
+    // "group:" to recognise the legacy internal form.
+    return kind === "channel"
+      ? `${normalizedChannel}:channel:${id}`
+      : `${normalizedChannel}:group:${id}`;
   })();
   const normalized = normalizedChannel
     ? getChannelPlugin(normalizedChannel)?.messaging?.normalizeTarget?.(kindTarget)
     : undefined;
   return {
     channel,
-    to: normalized ?? kindTarget,
+    to: normalized ?? id,
     threadId,
   };
 }
