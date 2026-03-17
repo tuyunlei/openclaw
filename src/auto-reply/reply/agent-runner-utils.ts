@@ -114,7 +114,7 @@ export const formatResponseUsageLine = (params: {
   model?: string;
   provider?: string;
   authProfileId?: string;
-  reasoningLevel?: string;
+  thinkLevel?: string;
   sessionKey?: string;
 }): string | null => {
   const usage = params.usage;
@@ -207,9 +207,9 @@ export const formatResponseUsageLine = (params: {
     } else if (params.provider) {
       parts.push(params.provider);
     }
-    // thinking/reasoning level
-    if (params.reasoningLevel) {
-      parts.push(params.reasoningLevel);
+    // thinking level
+    if (params.thinkLevel) {
+      parts.push(params.thinkLevel);
     }
     // weekly limit %
     if (weeklyLabel) {
