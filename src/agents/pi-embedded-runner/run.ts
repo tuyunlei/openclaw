@@ -222,7 +222,10 @@ const toNormalizedUsage = (usage: UsageAccumulator) => {
     input: usage.lastInput || undefined,
     output: usage.output || undefined,
     cacheRead: usage.lastCacheRead || undefined,
-    cacheWrite: usage.lastCacheWrite || undefined,
+    // CW is a cumulative metric (total cache tokens written this turn).
+    // Using lastCacheWrite would only show the final API call's incremental
+    // write, hiding the large initial cache-miss write from the footer.
+    cacheWrite: usage.cacheWrite || undefined,
     total: lastPromptTokens + usage.output || undefined,
   };
 };

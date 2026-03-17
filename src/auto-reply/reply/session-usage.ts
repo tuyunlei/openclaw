@@ -99,11 +99,13 @@ export async function persistSessionUsageUpdate(params: {
           if (hasUsage) {
             patch.inputTokens = params.usage?.input ?? 0;
             patch.outputTokens = params.usage?.output ?? 0;
-            // Cache counters should reflect the latest context snapshot when
-            // available, not accumulated per-call totals across a whole run.
+            // CR should reflect the latest context snapshot (last API call)
+            // so context-window utilization is accurate.
             const cacheUsage = params.lastCallUsage ?? params.usage;
             patch.cacheRead = cacheUsage?.cacheRead ?? 0;
-            patch.cacheWrite = cacheUsage?.cacheWrite ?? 0;
+            // CW is a cumulative metric (total cache written this turn).
+            // Always use accumulated usage to capture the initial cache-miss write.
+            patch.cacheWrite = params.usage?.cacheWrite ?? 0;
           }
           // Missing a last-call snapshot (and promptTokens fallback) means
           // context utilization is stale/unknown.
