@@ -19,6 +19,7 @@ import {
   resolveHeartbeatDeliveryTarget,
   resolveHeartbeatSenderContext,
 } from "./outbound/targets.js";
+import { drainSystemEvents } from "./system-events.js";
 import {
   applySessionGroupContext,
   buildSystemTurnBody,
@@ -77,6 +78,13 @@ export async function runEventDrivenTurn(opts: {
     return { status: "skipped", reason: "requests-in-flight" };
   }
 
+  // Drain system events AFTER confirming the session is free.
+  // If we drained before the queueSize check and the turn was skipped,
+  // events would be lost — the wake layer retries 1s later but the
+  // queue would already be empty.
+  const pendingEvents = drainSystemEvents(sessionKey);
+  const eventText = [opts.text, ...pendingEvents].filter(Boolean).join("\n").trim() || undefined;
+
   const parsed = parseSessionKeyChannelRoute(sessionKey);
   // Do NOT pass heartbeat config here — event-driven turns should not go through
   // heartbeat delivery resolution (which uses mode:"heartbeat" and can fail).
@@ -95,7 +103,7 @@ export async function runEventDrivenTurn(opts: {
 
   const injectProvider = parsed.channel ?? entry.lastChannel ?? "system-inject";
   const ctx: Record<string, unknown> = {
-    Body: buildSystemTurnBody(opts.text, cfg, startedAt),
+    Body: buildSystemTurnBody(eventText, cfg, startedAt),
     From: sender,
     To: effectiveTo ?? sender,
     Provider: injectProvider,

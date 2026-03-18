@@ -75,7 +75,7 @@ import {
   resolveHeartbeatDeliveryTarget,
   resolveHeartbeatSenderContext,
 } from "./outbound/targets.js";
-import { drainSystemEvents, peekSystemEventEntries } from "./system-events.js";
+import { peekSystemEventEntries } from "./system-events.js";
 import { applySessionGroupContext } from "./system-turn-context.js";
 
 export type HeartbeatDeps = OutboundSendDeps &
@@ -1099,18 +1099,18 @@ export function startHeartbeatRunner(opts: {
 
       // --- Phase 3: route event-driven wake to the new path ---
       if (isEventDriven && requestedSessionKey) {
-        // Drain pending system events so their text reaches the agent turn
-        // and they don't get re-processed by a subsequent periodic heartbeat.
-        const pendingEvents = drainSystemEvents(requestedSessionKey);
-        const eventText = pendingEvents.join("\n").trim() || undefined;
+        // Do NOT drain system events here — runEventDrivenTurn drains them
+        // internally after confirming the session is free (queueSize === 0).
+        // Draining before the check caused event loss: if the session was
+        // busy the turn was skipped but events were already removed from
+        // the queue, so retries found an empty queue.
         log.info(
-          `heartbeat runner: Phase 3 event-driven wake: sessionKey=${requestedSessionKey} reason=${reason} drainedEvents=${pendingEvents.length} eventTextLen=${eventText?.length ?? 0}`,
+          `heartbeat runner: Phase 3 event-driven wake: sessionKey=${requestedSessionKey} reason=${reason}`,
         );
         try {
           const res = await runEventDrivenTurn({
             cfg: state.cfg,
             sessionKey: requestedSessionKey,
-            text: eventText,
             reason,
             deps: { runtime: state.runtime },
           });
