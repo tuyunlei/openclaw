@@ -9,6 +9,7 @@ import {
   resolveFreshSessionTotalTokens,
   resolveSessionFilePath,
   resolveSessionFilePathOptions,
+  updateSessionStore,
 } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
@@ -120,7 +121,7 @@ export const handleCompactCommand: CommandHandler = async (params) => {
       : "Compaction skipped"
     : "Compaction failed";
   if (result.ok && result.compacted) {
-    await incrementCompactionCount({
+    const nextCount = await incrementCompactionCount({
       sessionEntry: params.sessionEntry,
       sessionStore: params.sessionStore,
       sessionKey: params.sessionKey,
@@ -128,6 +129,32 @@ export const handleCompactCommand: CommandHandler = async (params) => {
       // Update token counts after compaction
       tokensAfter: result.result?.tokensAfter,
     });
+    // Mark memory flush as done for this compaction cycle so the post-compact
+    // system-event turn doesn't trigger a spurious flush on already-compacted
+    // (reduced) context.  Manual /compact bypasses runMemoryFlushIfNeeded, so
+    // the forceFlushTranscriptBytes path would otherwise fire because the JSONL
+    // file only grows — even though compaction already happened.
+    if (typeof nextCount === "number" && params.sessionKey) {
+      const entry = params.sessionStore?.[params.sessionKey] ?? params.sessionEntry;
+      if (entry) {
+        entry.memoryFlushCompactionCount = nextCount;
+        if (params.sessionStore) {
+          params.sessionStore[params.sessionKey] = entry;
+        }
+      }
+      if (params.storePath) {
+        try {
+          await updateSessionStore(params.storePath, (store) => {
+            const s = store[params.sessionKey];
+            if (s) {
+              s.memoryFlushCompactionCount = nextCount;
+            }
+          });
+        } catch {
+          // Best-effort — the spurious flush is cosmetic, not data-losing
+        }
+      }
+    }
   }
   // Use the post-compaction token count for context summary if available
   const tokensAfterCompaction = result.result?.tokensAfter;
