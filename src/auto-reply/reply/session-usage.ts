@@ -4,12 +4,15 @@ import {
   hasNonzeroUsage,
   type NormalizedUsage,
 } from "../../agents/usage.js";
+import type { OpenClawConfig } from "../../config/config.js";
+import { loadConfig } from "../../config/config.js";
 import {
   type SessionSystemPromptReport,
   type SessionEntry,
   updateSessionStoreEntry,
 } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
+import { estimateUsageCost, resolveModelCostConfig } from "../../utils/usage-format.js";
 
 function applyCliSessionIdToSessionPatch(
   params: {
@@ -32,9 +35,31 @@ function applyCliSessionIdToSessionPatch(
   return patch;
 }
 
+function resolveNonNegativeNumber(value: number | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function estimateSessionRunCostUsd(params: {
+  cfg: OpenClawConfig;
+  usage?: NormalizedUsage;
+  providerUsed?: string;
+  modelUsed?: string;
+}): number | undefined {
+  if (!hasNonzeroUsage(params.usage)) {
+    return undefined;
+  }
+  const cost = resolveModelCostConfig({
+    provider: params.providerUsed,
+    model: params.modelUsed,
+    config: params.cfg,
+  });
+  return resolveNonNegativeNumber(estimateUsageCost({ usage: params.usage, cost }));
+}
+
 export async function persistSessionUsageUpdate(params: {
   storePath?: string;
   sessionKey?: string;
+  cfg?: OpenClawConfig;
   usage?: NormalizedUsage;
   /**
    * Usage from the last individual API call (not accumulated). When provided,
@@ -57,6 +82,7 @@ export async function persistSessionUsageUpdate(params: {
   }
 
   const label = params.logLabel ? `${params.logLabel} ` : "";
+  const cfg = params.cfg ?? loadConfig();
   const hasUsage = hasNonzeroUsage(params.usage);
   const hasPromptTokens =
     typeof params.promptTokens === "number" &&
@@ -89,6 +115,13 @@ export async function persistSessionUsageUpdate(params: {
                 promptTokens: params.promptTokens,
               })
             : undefined;
+          const runEstimatedCostUsd = estimateSessionRunCostUsd({
+            cfg,
+            usage: params.usage,
+            providerUsed: params.providerUsed ?? entry.modelProvider,
+            modelUsed: params.modelUsed ?? entry.model,
+          });
+          const existingEstimatedCostUsd = resolveNonNegativeNumber(entry.estimatedCostUsd) ?? 0;
           const patch: Partial<SessionEntry> = {
             modelProvider: params.providerUsed ?? entry.modelProvider,
             model: params.modelUsed ?? entry.model,
@@ -106,6 +139,11 @@ export async function persistSessionUsageUpdate(params: {
             // CW is a cumulative metric (total cache written this turn).
             // Always use accumulated usage to capture the initial cache-miss write.
             patch.cacheWrite = params.usage?.cacheWrite ?? 0;
+          }
+          if (runEstimatedCostUsd !== undefined) {
+            patch.estimatedCostUsd = existingEstimatedCostUsd + runEstimatedCostUsd;
+          } else if (entry.estimatedCostUsd !== undefined) {
+            patch.estimatedCostUsd = entry.estimatedCostUsd;
           }
           // Missing a last-call snapshot (and promptTokens fallback) means
           // context utilization is stale/unknown.

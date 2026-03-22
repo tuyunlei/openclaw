@@ -51,26 +51,34 @@ export function resolveAnnounceTargetFromKey(sessionKey: string): AnnounceTarget
   }
   const normalizedChannel = normalizeAnyChannelId(channelRaw) ?? normalizeChatChannelId(channelRaw);
   const channel = normalizedChannel ?? channelRaw.toLowerCase();
-  const kindTarget = (() => {
-    if (!normalizedChannel) {
-      return id;
-    }
-    if (normalizedChannel === "discord" || normalizedChannel === "slack") {
-      return `channel:${id}`;
-    }
-    // Include channel prefix so normalizeTarget can strip it properly.
-    // e.g. Telegram's stripTelegramInternalPrefixes needs "telegram:" before
-    // "group:" to recognise the legacy internal form.
-    return kind === "channel"
-      ? `${normalizedChannel}:channel:${id}`
-      : `${normalizedChannel}:group:${id}`;
-  })();
-  const normalized = normalizedChannel
-    ? getChannelPlugin(normalizedChannel)?.messaging?.normalizeTarget?.(kindTarget)
-    : undefined;
+  const plugin = normalizedChannel ? getChannelPlugin(normalizedChannel) : null;
+  const genericTarget = kind === "channel" ? `channel:${id}` : `group:${id}`;
+  const normalized =
+    plugin?.messaging?.resolveSessionTarget?.({
+      kind,
+      id,
+      threadId,
+    }) ??
+    plugin?.messaging?.normalizeTarget?.(
+      !normalizedChannel
+        ? id
+        : normalizedChannel === "discord" || normalizedChannel === "slack"
+          ? `channel:${id}`
+          : kind === "channel"
+            ? `${normalizedChannel}:channel:${id}`
+            : `${normalizedChannel}:group:${id}`,
+    );
   return {
     channel,
-    to: normalized ?? id,
+    to:
+      normalized ??
+      (!normalizedChannel ||
+      normalizedChannel === "telegram" ||
+      normalizedChannel === "signal" ||
+      normalizedChannel === "whatsapp" ||
+      normalizedChannel === "imessage"
+        ? id
+        : genericTarget),
     threadId,
   };
 }

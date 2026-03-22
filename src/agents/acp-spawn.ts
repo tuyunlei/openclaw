@@ -41,7 +41,12 @@ import {
   normalizeAgentId,
   parseAgentSessionKey,
 } from "../routing/session-key.js";
-import { deliveryContextFromSession, normalizeDeliveryContext } from "../utils/delivery-context.js";
+import {
+  deliveryContextFromSession,
+  formatConversationTarget,
+  normalizeDeliveryContext,
+  resolveConversationDeliveryTarget,
+} from "../utils/delivery-context.js";
 import {
   type AcpSpawnParentRelayHandle,
   resolveAcpSpawnStreamLogPath,
@@ -679,9 +684,19 @@ export async function spawnAcpDirect(
   const fallbackThreadId =
     fallbackThreadIdRaw != null ? String(fallbackThreadIdRaw).trim() || undefined : undefined;
   const deliveryThreadId = boundThreadId ?? fallbackThreadId;
-  const inferredDeliveryTo = boundThreadId
-    ? `channel:${boundThreadId}`
-    : requesterOrigin?.to?.trim() || (deliveryThreadId ? `channel:${deliveryThreadId}` : undefined);
+  const boundDeliveryTarget = resolveConversationDeliveryTarget({
+    channel: requesterOrigin?.channel ?? binding?.conversation.channel,
+    conversationId: binding?.conversation.conversationId,
+    parentConversationId: binding?.conversation.parentConversationId,
+  });
+  const inferredDeliveryTo =
+    boundDeliveryTarget.to ??
+    requesterOrigin?.to?.trim() ??
+    formatConversationTarget({
+      channel: requesterOrigin?.channel,
+      conversationId: deliveryThreadId,
+    });
+  const resolvedDeliveryThreadId = boundDeliveryTarget.threadId ?? deliveryThreadId;
   const hasDeliveryTarget = Boolean(requesterOrigin?.channel && inferredDeliveryTo);
   const workflowMode = params.announceMode === "workflow";
   // Fresh one-shot ACP runs should bootstrap the worker first, then let higher layers
@@ -717,7 +732,7 @@ export async function spawnAcpDirect(
         channel: useInlineDelivery ? requesterOrigin?.channel : undefined,
         to: useInlineDelivery ? inferredDeliveryTo : undefined,
         accountId: useInlineDelivery ? (requesterOrigin?.accountId ?? undefined) : undefined,
-        threadId: useInlineDelivery ? deliveryThreadId : undefined,
+        threadId: useInlineDelivery ? resolvedDeliveryThreadId : undefined,
         idempotencyKey: childIdem,
         deliver: useInlineDelivery,
         label: params.label || undefined,

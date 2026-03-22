@@ -3,7 +3,6 @@ import type { ChannelPlugin } from "../channels/plugins/types.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createTestRegistry } from "../test-utils/channel-plugins.js";
-import { resolveOwnerNumbersForChannel } from "./command-auth.js";
 
 function createTestPlugin(params: { allowFrom?: Array<string | number> }): ChannelPlugin {
   return {
@@ -30,7 +29,6 @@ function makeRegistry(channels: Array<{ pluginId: string; plugin: unknown; sourc
   return createTestRegistry(channels);
 }
 
-describe("resolveOwnerNumbersForChannel", () => {
   afterEach(() => {
     setActivePluginRegistry(makeRegistry([]));
   });
@@ -39,7 +37,6 @@ describe("resolveOwnerNumbersForChannel", () => {
     const plugin = createTestPlugin({ allowFrom: ["+15550001", "+15550002"] });
     setActivePluginRegistry(makeRegistry([{ pluginId: "testchan", plugin, source: "test" }]));
     const cfg = {} as OpenClawConfig;
-    const result = resolveOwnerNumbersForChannel({
       cfg,
       messageChannel: "testchan",
     });
@@ -50,7 +47,6 @@ describe("resolveOwnerNumbersForChannel", () => {
     const plugin = createTestPlugin({ allowFrom: undefined });
     setActivePluginRegistry(makeRegistry([{ pluginId: "testchan", plugin, source: "test" }]));
     const cfg = {} as OpenClawConfig;
-    const result = resolveOwnerNumbersForChannel({
       cfg,
       messageChannel: "testchan",
     });
@@ -60,7 +56,6 @@ describe("resolveOwnerNumbersForChannel", () => {
   it("returns undefined when messageChannel is undefined", () => {
     setActivePluginRegistry(makeRegistry([]));
     const cfg = {} as OpenClawConfig;
-    const result = resolveOwnerNumbersForChannel({
       cfg,
       messageChannel: undefined,
     });
@@ -73,7 +68,6 @@ describe("resolveOwnerNumbersForChannel", () => {
     const cfg = {
       commands: { ownerAllowFrom: ["+15559999"] },
     } as OpenClawConfig;
-    const result = resolveOwnerNumbersForChannel({
       cfg,
       messageChannel: "testchan",
     });
@@ -86,7 +80,6 @@ describe("resolveOwnerNumbersForChannel", () => {
     const cfg = {
       commands: { ownerAllowFrom: ["*"] },
     } as OpenClawConfig;
-    const result = resolveOwnerNumbersForChannel({
       cfg,
       messageChannel: "testchan",
     });
@@ -97,7 +90,6 @@ describe("resolveOwnerNumbersForChannel", () => {
     const plugin = createTestPlugin({ allowFrom: ["*"] });
     setActivePluginRegistry(makeRegistry([{ pluginId: "testchan", plugin, source: "test" }]));
     const cfg = {} as OpenClawConfig;
-    const result = resolveOwnerNumbersForChannel({
       cfg,
       messageChannel: "testchan",
     });

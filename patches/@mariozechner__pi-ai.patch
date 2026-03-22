@@ -1,20 +1,7 @@
-diff --git a/dist/utils/oauth/anthropic.js b/dist/utils/oauth/anthropic.js
-index 875ce245a44ee825daf1fbe5bc29ead47587b9cc..7a715179d3cea7b112734c6b31e1b4f51efbb825 100644
---- a/dist/utils/oauth/anthropic.js
-+++ b/dist/utils/oauth/anthropic.js
-@@ -307,7 +307,6 @@ export async function refreshAnthropicToken(refreshToken) {
-             grant_type: "refresh_token",
-             client_id: CLIENT_ID,
-             refresh_token: refreshToken,
--            scope: SCOPES,
-         });
-     }
-     catch (error) {
 diff --git a/dist/utils/oauth/index.js b/dist/utils/oauth/index.js
-index 33d5fce32294d22463206fa11196d9d1bb4e7d0f..ef0acdb9ae5b089d9ac95a51ff45cc7b3f913076 100644
 --- a/dist/utils/oauth/index.js
 +++ b/dist/utils/oauth/index.js
-@@ -122,7 +122,7 @@ export async function getOAuthApiKey(providerId, credentials) {
+@@ -122,7 +122,7 @@
              creds = await provider.refreshToken(creds);
          }
          catch (_error) {
